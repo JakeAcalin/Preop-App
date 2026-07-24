@@ -1,9 +1,93 @@
+import { useState } from 'react';
 import type { FieldDef } from '../types';
+import { colorForTag } from '../lib/tagColor';
 
 interface Props {
   field: FieldDef;
   value: string | string[] | undefined;
   onChange: (value: string | string[]) => void;
+}
+
+function TagPicker({ field, value, onChange }: Props) {
+  const [customText, setCustomText] = useState('');
+  const values = (value as string[]) ?? [];
+  const remainingOptions = (field.options ?? []).filter((opt) => !values.includes(opt));
+
+  function addTag(tag: string) {
+    const trimmed = tag.trim();
+    if (!trimmed || values.includes(trimmed)) return;
+    onChange([...values, trimmed]);
+  }
+
+  function removeTag(tag: string) {
+    onChange(values.filter((v) => v !== tag));
+  }
+
+  return (
+    <div className="tag-picker">
+      {values.length > 0 && (
+        <div className="tag-list">
+          {values.map((tag) => {
+            const c = colorForTag(tag);
+            return (
+              <span key={tag} className="tag-chip" style={{ background: c.bg, color: c.fg }}>
+                {tag}
+                <button
+                  type="button"
+                  className="tag-remove"
+                  style={{ color: c.fg }}
+                  onClick={() => removeTag(tag)}
+                  aria-label={`Remove ${tag}`}
+                >
+                  {'×'}
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {remainingOptions.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) addTag(e.target.value);
+          }}
+        >
+          <option value="">+ Add from list...</option>
+          {remainingOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="tag-custom-add">
+        <input
+          type="text"
+          placeholder="Add custom..."
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addTag(customText);
+              setCustomText('');
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="small"
+          onClick={() => {
+            addTag(customText);
+            setCustomText('');
+          }}
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function FieldInput({ field, value, onChange }: Props) {
@@ -32,24 +116,7 @@ export default function FieldInput({ field, value, onChange }: Props) {
   }
 
   if (field.type === 'multiselect') {
-    const values = (value as string[]) ?? [];
-    return (
-      <div className="multiselect">
-        {field.options?.map((opt) => (
-          <label key={opt} className="checkbox-option">
-            <input
-              type="checkbox"
-              checked={values.includes(opt)}
-              onChange={(e) => {
-                if (e.target.checked) onChange([...values, opt]);
-                else onChange(values.filter((v) => v !== opt));
-              }}
-            />
-            {opt}
-          </label>
-        ))}
-      </div>
-    );
+    return <TagPicker field={field} value={value} onChange={onChange} />;
   }
 
   return (

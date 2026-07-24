@@ -342,22 +342,44 @@ button:disabled {
   border-bottom: none;
 }
 
-.multiselect {
+.tag-picker {
+  margin-top: 4px;
+}
+
+.tag-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 8px;
 }
 
-.checkbox-option {
-  display: flex;
+.tag-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 400;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.checkbox-option input {
-  width: auto;
-  margin: 0;
+.tag-remove {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tag-custom-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tag-custom-add input {
+  margin-top: 0;
 }
 
 .summary-header {
