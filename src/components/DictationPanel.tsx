@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { PreopCase } from '../types';
 import { FIELDS } from '../data/fields';
-import { routeTranscript, appendToValue, type RoutedFragment } from '../data/dictationRouter';
+import { routeTranscript, applyDictatedText, type RoutedFragment } from '../data/dictationRouter';
 import MicButton from './MicButton';
 
 interface Props {
@@ -40,9 +40,14 @@ export default function DictationPanel({ onUpdateCase }: Props) {
       const values = { ...c.values };
       const unsorted = [...c.unsorted];
       for (const item of review) {
-        if (item.fieldId) {
-          const existing = values[item.fieldId];
-          values[item.fieldId] = appendToValue(typeof existing === 'string' ? existing : '', item.text);
+        const field = item.fieldId ? FIELDS.find((f) => f.id === item.fieldId) : undefined;
+        if (field) {
+          const result = applyDictatedText(field, values[field.id], item.text);
+          if (result.kind === 'value') {
+            values[field.id] = result.value;
+          } else {
+            unsorted.push({ id: item.id, text: item.text, createdAt: Date.now() });
+          }
         } else {
           unsorted.push({ id: item.id, text: item.text, createdAt: Date.now() });
         }

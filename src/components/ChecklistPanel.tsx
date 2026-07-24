@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { PreopCase } from '../types';
 import { FIELDS, SECTIONS } from '../data/fields';
-import { appendToValue } from '../data/dictationRouter';
+import { applyDictatedText } from '../data/dictationRouter';
 import FieldInput from './FieldInput';
 import MicButton from './MicButton';
 
@@ -28,13 +28,17 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
     onUpdateCase((c) => ({ ...c, values: { ...c.values, [fieldId]: value }, updatedAt: Date.now() }));
   }
 
-  function dictateIntoField(fieldId: string, text: string) {
-    if (!text.trim()) return;
-    onUpdateCase((c) => {
-      const existing = c.values[fieldId];
-      const merged = appendToValue(typeof existing === 'string' ? existing : '', text);
-      return { ...c, values: { ...c.values, [fieldId]: merged }, updatedAt: Date.now() };
-    });
+  // Returns whether the text was actually applied to the field (false means a
+  // select field had no confident match - caller should leave it for manual pick
+  // rather than silently discarding the dictated/unsorted text).
+  function dictateIntoField(fieldId: string, text: string): boolean {
+    if (!text.trim()) return false;
+    const field = FIELDS.find((f) => f.id === fieldId);
+    if (!field) return false;
+    const result = applyDictatedText(field, preopCase.values[fieldId], text);
+    if (result.kind !== 'value') return false;
+    onUpdateCase((c) => ({ ...c, values: { ...c.values, [fieldId]: result.value }, updatedAt: Date.now() }));
+    return true;
   }
 
   const currentField = walking ? missingRequired[walkIndex] : undefined;
@@ -128,8 +132,12 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
                   onChange={(e) => {
                     const fieldId = e.target.value;
                     if (!fieldId) return;
-                    dictateIntoField(fieldId, note.text);
-                    onUpdateCase((c) => ({ ...c, unsorted: c.unsorted.filter((n) => n.id !== note.id) }));
+                    const applied = dictateIntoField(fieldId, note.text);
+                    if (applied) {
+                      onUpdateCase((c) => ({ ...c, unsorted: c.unsorted.filter((n) => n.id !== note.id) }));
+                    } else {
+                      alert("Couldn't match that text to one of this field's preset options - pick the right option yourself in the field above, then discard this note.");
+                    }
                   }}
                 >
                   <option value="">Assign to field...</option>

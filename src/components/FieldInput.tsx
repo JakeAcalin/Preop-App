@@ -10,7 +10,7 @@ interface Props {
 
 function TagPicker({ field, value, onChange }: Props) {
   const [customText, setCustomText] = useState('');
-  const values = (value as string[]) ?? [];
+  const values = Array.isArray(value) ? value : [];
   const remainingOptions = (field.options ?? []).filter((opt) => !values.includes(opt));
 
   function addTag(tag: string) {
