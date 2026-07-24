@@ -2,13 +2,14 @@
   "name": "Preop Assistant",
   "short_name": "Preop",
   "description": "Dictate chart review, walk the checklist, present to attending.",
-  "start_url": "/",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#121218",
   "theme_color": "#6d3bff",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
