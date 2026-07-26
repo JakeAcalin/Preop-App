@@ -3,13 +3,20 @@ import type { PreopCase } from '../types';
 import { FIELDS, SECTIONS } from '../data/fields';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
 import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
+import { derivePatientWeights, type PatientWeights } from '../lib/weights';
+import { calculateDoses } from '../lib/doseCalc';
 import ProcedureNotes from './ProcedureNotes';
+import DoseHints from './DoseHints';
 
 interface Props {
   preopCase: PreopCase;
 }
 
-function buildPlainTextSummary(preopCase: PreopCase, procedureLabel: string): string {
+function buildPlainTextSummary(
+  preopCase: PreopCase,
+  procedureLabel: string,
+  weights: PatientWeights,
+): string {
   const lines: string[] = [];
   lines.push(`Case: ${displayCaseLabel(preopCase)} (${formatWeekday(preopCase.caseDate)})`);
   lines.push(`Procedure: ${procedureLabel}`);
@@ -24,7 +31,11 @@ function buildPlainTextSummary(preopCase: PreopCase, procedureLabel: string): st
     lines.push(`${section.label.toUpperCase()}`);
     for (const f of filled) {
       const v = preopCase.values[f.id];
-      lines.push(`- ${f.label}: ${Array.isArray(v) ? v.join(', ') : v}`);
+      const value = Array.isArray(v) ? v.join(', ') : v;
+      const doses = calculateDoses(v, weights)
+        .filter((d) => d.dose !== '-')
+        .map((d) => `${d.label} ${d.dose}`);
+      lines.push(`- ${f.label}: ${value}${doses.length > 0 ? ` [${doses.join('; ')}]` : ''}`);
     }
     lines.push('');
   }
@@ -37,8 +48,10 @@ export default function SummaryPanel({ preopCase }: Props) {
   const dictatedProcedure = typeof preopCase.values.plannedProcedure === 'string' ? preopCase.values.plannedProcedure : '';
   const procedureLabel = procedure?.label || dictatedProcedure || 'Not set';
 
+  const weights = derivePatientWeights(preopCase.values);
+
   async function handleCopy() {
-    const text = buildPlainTextSummary(preopCase, procedureLabel);
+    const text = buildPlainTextSummary(preopCase, procedureLabel, weights);
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -71,10 +84,14 @@ export default function SummaryPanel({ preopCase }: Props) {
             <dl className="summary-dl">
               {filled.map((f) => {
                 const v = preopCase.values[f.id];
+                const doses = calculateDoses(v, weights);
                 return (
                   <div className="summary-row" key={f.id}>
                     <dt>{f.label}</dt>
-                    <dd>{Array.isArray(v) ? v.join(', ') : v}</dd>
+                    <dd>
+                      {Array.isArray(v) ? v.join(', ') : v}
+                      <DoseHints doses={doses} />
+                    </dd>
                   </div>
                 );
               })}

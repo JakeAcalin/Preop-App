@@ -5,9 +5,13 @@ import { applyDictatedText } from '../data/dictationRouter';
 import { correctMedicalText } from '../lib/textCorrection';
 import { parseSpeech, type VoiceCommand } from '../lib/voiceCommands';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
+import { derivePatientWeights } from '../lib/weights';
+import { calculateDoses } from '../lib/doseCalc';
 import { useVoiceSession } from '../hooks/useVoiceSession';
 import FieldInput from './FieldInput';
 import ProcedureNotes from './ProcedureNotes';
+import DoseHints from './DoseHints';
+import WeightsCard from './WeightsCard';
 
 interface Props {
   preopCase: PreopCase;
@@ -44,6 +48,21 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
 
   const procedure = useMemo(() => resolveCaseProcedure(preopCase), [preopCase]);
   const procedureInferred = !preopCase.procedureType && Boolean(procedure);
+
+  const weights = useMemo(() => derivePatientWeights(preopCase.values), [preopCase.values]);
+
+  function fillDerivedWeights(ibwKg: number | undefined, bmi: number | undefined) {
+    onUpdateCase((c) => {
+      const values = { ...c.values };
+      if (ibwKg !== undefined && !String(values.ibwKg ?? '').trim()) {
+        values.ibwKg = String(Math.round(ibwKg * 10) / 10);
+      }
+      if (bmi !== undefined && !String(values.bmi ?? '').trim()) {
+        values.bmi = String(Math.round(bmi * 10) / 10);
+      }
+      return { ...c, values, updatedAt: Date.now() };
+    });
+  }
 
   // Voice handlers run inside a long-lived recognition callback, so they read
   // the current field/index through refs rather than stale closure values.
@@ -196,6 +215,8 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
               onChange={(v) => setFieldValue(currentField.id, v)}
             />
 
+            <DoseHints doses={calculateDoses(preopCase.values[currentField.id], weights)} />
+
             <p className="muted small current-value">Current: {describeValue(preopCase.values[currentField.id])}</p>
 
             {!supported ? (
@@ -245,23 +266,35 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
 
       <h3>All fields</h3>
       {SECTIONS.map((section) => (
-        <div className="card" key={section.id}>
-          <h4>{section.label}</h4>
-          {FIELDS.filter((f) => f.section === section.id).map((field) => (
-            <div className="field-row" key={field.id}>
-              <label>
-                {field.label}
-                {field.required && isEmpty(preopCase.values[field.id]) && (
-                  <span className="badge-missing">missing</span>
-                )}
-              </label>
-              <FieldInput
-                field={field}
-                value={preopCase.values[field.id]}
-                onChange={(v) => setFieldValue(field.id, v)}
-              />
-            </div>
-          ))}
+        <div key={section.id}>
+          <div className="card">
+            <h4>{section.label}</h4>
+            {FIELDS.filter((f) => f.section === section.id).map((field) => (
+              <div className="field-row" key={field.id}>
+                <label>
+                  {field.label}
+                  {field.required && isEmpty(preopCase.values[field.id]) && (
+                    <span className="badge-missing">missing</span>
+                  )}
+                </label>
+                <FieldInput
+                  field={field}
+                  value={preopCase.values[field.id]}
+                  onChange={(v) => setFieldValue(field.id, v)}
+                />
+                <DoseHints doses={calculateDoses(preopCase.values[field.id], weights)} />
+              </div>
+            ))}
+          </div>
+
+          {section.id === 'height_weight' && (
+            <WeightsCard
+              weights={weights}
+              onFillDerived={fillDerivedWeights}
+              ibwFieldFilled={!isEmpty(preopCase.values.ibwKg)}
+              bmiFieldFilled={!isEmpty(preopCase.values.bmi)}
+            />
+          )}
         </div>
       ))}
 

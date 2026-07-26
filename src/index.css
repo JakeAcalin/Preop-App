@@ -343,6 +343,60 @@ button:disabled {
   border-bottom: none;
 }
 
+.dose-hints {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dose-hint {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.dose-hint-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dose-hint-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dose-hint-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.dose-capped {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.dose-hint-basis {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.dose-hint-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+
 .case-title-row {
   display: flex;
   align-items: baseline;
