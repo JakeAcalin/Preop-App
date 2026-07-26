@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PreopCase } from '../types';
 import { FIELDS, SECTIONS } from '../data/fields';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
+import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
 import ProcedureNotes from './ProcedureNotes';
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 
 function buildPlainTextSummary(preopCase: PreopCase, procedureLabel: string): string {
   const lines: string[] = [];
-  lines.push(`Patient: ${preopCase.patientLabel}`);
+  lines.push(`Case: ${displayCaseLabel(preopCase)} (${formatWeekday(preopCase.caseDate)})`);
   lines.push(`Procedure: ${procedureLabel}`);
   lines.push('');
   for (const section of SECTIONS) {
@@ -48,7 +49,7 @@ export default function SummaryPanel({ preopCase }: Props) {
       <div className="card">
         <div className="summary-header">
           <div>
-            <h2>{preopCase.patientLabel}</h2>
+            <h2>{displayCaseLabel(preopCase)}</h2>
             <p className="muted">{procedureLabel}</p>
           </div>
           <button className="primary" onClick={handleCopy}>

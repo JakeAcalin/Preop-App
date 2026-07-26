@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getCase, saveCase } from '../lib/db';
+import { getCase, saveCase, nextCaseNumber } from '../lib/db';
 import type { PreopCase } from '../types';
 import { PROCEDURES } from '../data/procedures';
+import {
+  addDays,
+  buildCaseLabel,
+  defaultCaseDate,
+  formatWeekday,
+  nextMonday,
+  toISODate,
+} from '../lib/caseDate';
 import ChecklistPanel from '../components/ChecklistPanel';
 import SummaryPanel from '../components/SummaryPanel';
 
@@ -34,6 +42,13 @@ export default function CaseEditor() {
     });
   }
 
+  // Moving a case to another day renumbers it against that day's cases.
+  async function changeCaseDate(caseDate: string) {
+    if (!caseDate || !preopCase) return;
+    const caseNumber = await nextCaseNumber(caseDate, preopCase.id);
+    updateCase((c) => ({ ...c, caseDate, caseNumber, updatedAt: Date.now() }));
+  }
+
   if (!preopCase) return <div className="page">Loading...</div>;
 
   return (
@@ -43,13 +58,38 @@ export default function CaseEditor() {
       </button>
 
       <div className="case-header card">
+        <div className="case-title-row">
+          <h2>{buildCaseLabel(preopCase.caseDate, preopCase.caseNumber)}</h2>
+          <span className="muted small">{formatWeekday(preopCase.caseDate)}</span>
+        </div>
+
         <label>
-          Case
+          Date of surgery
+          <input type="date" value={preopCase.caseDate} onChange={(e) => changeCaseDate(e.target.value)} />
+        </label>
+        <div className="date-quick-set">
+          <button className="small" onClick={() => changeCaseDate(defaultCaseDate())}>
+            Tomorrow
+          </button>
+          <button className="small" onClick={() => changeCaseDate(toISODate(addDays(new Date(), 2)))}>
+            +2 days
+          </button>
+          <button className="small" onClick={() => changeCaseDate(nextMonday())}>
+            Next Monday
+          </button>
+        </div>
+
+        <label>
+          Label override (optional)
           <input
-            value={preopCase.patientLabel}
-            onChange={(e) => updateCase((c) => ({ ...c, patientLabel: e.target.value, updatedAt: Date.now() }))}
+            placeholder="e.g. add room or service"
+            value={preopCase.customLabel ?? ''}
+            onChange={(e) =>
+              updateCase((c) => ({ ...c, customLabel: e.target.value || undefined, updatedAt: Date.now() }))
+            }
           />
         </label>
+
         <label>
           Procedure type (optional - otherwise matched from what you dictate)
           <select

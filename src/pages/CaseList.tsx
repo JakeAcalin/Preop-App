@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { listCases, createCase, deleteCase } from '../lib/db';
 import type { PreopCase } from '../types';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
+import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
 
 export default function CaseList() {
   const [cases, setCases] = useState<PreopCase[]>([]);
@@ -41,9 +42,9 @@ export default function CaseList() {
           return (
             <li key={c.id} className="case-row" onClick={() => navigate(`/case/${c.id}`)}>
               <div>
-                <strong>{c.patientLabel}</strong>
+                <strong>{displayCaseLabel(c)}</strong>
                 <div className="muted small">
-                  {procedure?.label || dictatedProcedure || 'No procedure yet'}
+                  {formatWeekday(c.caseDate)} - {procedure?.label || dictatedProcedure || 'No procedure yet'}
                 </div>
               </div>
               <button className="danger small" onClick={(e) => handleDelete(c.id, e)}>

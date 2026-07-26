@@ -108,6 +108,7 @@ label {
 }
 
 input[type='text'],
+input[type='date'],
 input:not([type]),
 textarea,
 select {
@@ -340,6 +341,26 @@ button:disabled {
 
 .unsorted-item:last-child {
   border-bottom: none;
+}
+
+.case-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.case-title-row h2 {
+  margin: 0;
+}
+
+.date-quick-set {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
 .new-case-btn {

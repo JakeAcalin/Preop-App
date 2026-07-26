@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { PreopCase } from '../types';
+import { defaultCaseDate, toISODate } from './caseDate';
 
 interface PreopDB extends DBSchema {
   cases: {
@@ -23,15 +24,32 @@ function getDB() {
   return dbPromise;
 }
 
+/**
+ * Cases saved before caseDate/caseNumber existed carried a free-text
+ * `patientLabel` and no case date. Fill those in from the creation date so
+ * older cases keep working and keep their original label.
+ */
+function migrateCase(stored: PreopCase & { patientLabel?: string }): PreopCase {
+  if (stored.caseDate && stored.caseNumber) return stored;
+  const { patientLabel, ...rest } = stored;
+  return {
+    ...rest,
+    caseDate: stored.caseDate ?? toISODate(new Date(stored.createdAt)),
+    caseNumber: stored.caseNumber ?? 1,
+    customLabel: stored.customLabel ?? patientLabel,
+  };
+}
+
 export async function listCases(): Promise<PreopCase[]> {
   const db = await getDB();
   const all = await db.getAllFromIndex('cases', 'by-updatedAt');
-  return all.reverse();
+  return all.reverse().map(migrateCase);
 }
 
 export async function getCase(id: string): Promise<PreopCase | undefined> {
   const db = await getDB();
-  return db.get('cases', id);
+  const stored = await db.get('cases', id);
+  return stored ? migrateCase(stored) : undefined;
 }
 
 export async function saveCase(preopCase: PreopCase): Promise<void> {
@@ -44,38 +62,26 @@ export async function deleteCase(id: string): Promise<void> {
   await db.delete('cases', id);
 }
 
-function formatDateLabel(date: Date): string {
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${mm}/${dd}/${yy}`;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-  );
-}
-
 /**
- * Builds the next case label for today, e.g. "07/25/26; Case 1". The case
- * number counts cases created on the same calendar day, so it restarts at 1
- * each morning.
+ * Next case number for a given date of surgery - cases are numbered per
+ * operative date, so moving a case to a different day renumbers it against
+ * that day's list rather than the day it was dictated.
  */
-export async function nextCaseLabel(): Promise<string> {
-  const now = new Date();
+export async function nextCaseNumber(caseDate: string, excludeId?: string): Promise<number> {
   const existing = await listCases();
-  const todayCount = existing.filter((c) => isSameDay(new Date(c.createdAt), now)).length;
-  return `${formatDateLabel(now)}; Case ${todayCount + 1}`;
+  const sameDay = existing.filter((c) => c.caseDate === caseDate && c.id !== excludeId);
+  return sameDay.length + 1;
 }
 
 export async function createCase(): Promise<PreopCase> {
   const now = Date.now();
+  const caseDate = defaultCaseDate();
   const preopCase: PreopCase = {
     id: crypto.randomUUID(),
     createdAt: now,
     updatedAt: now,
-    patientLabel: await nextCaseLabel(),
+    caseDate,
+    caseNumber: await nextCaseNumber(caseDate),
     procedureType: '',
     values: {},
     unsorted: [],

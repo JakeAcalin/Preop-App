@@ -34,7 +34,12 @@ export interface PreopCase {
   id: string;
   createdAt: number;
   updatedAt: number;
-  patientLabel: string; // e.g. "Rm 12 - JS" - deliberately not full PHI-identifiable by default
+  /** Date of surgery as "YYYY-MM-DD" - usually the day after you preop it. */
+  caseDate: string;
+  /** Nth case on that date, used to build the default label. */
+  caseNumber: number;
+  /** Optional override; when unset the label is derived from caseDate/caseNumber. */
+  customLabel?: string;
   procedureType: string; // key into procedure knowledge base, or freetext if no match
   values: FieldValues;
   unsorted: UnsortedNote[];
