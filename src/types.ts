@@ -42,6 +42,12 @@ export interface PreopCase {
   caseNumber: number;
   /** Optional override; when unset the label is derived from caseDate/caseNumber. */
   customLabel?: string;
+  /**
+   * Which rotation the case fell in. Describes your schedule rather than the
+   * patient's encounter, so it survives de-identification and still tells you
+   * roughly when a case happened.
+   */
+  rotation?: string;
   procedureType: string; // key into procedure knowledge base, or freetext if no match
   values: FieldValues;
   unsorted: UnsortedNote[];

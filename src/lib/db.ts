@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { FieldValues, PreopCase } from '../types';
 import { FIELDS } from '../data/fields';
 import { defaultCaseDate, toISODate } from './caseDate';
+import { deidentifyCases, type Redaction } from './deidentify';
 
 interface PreopDB extends DBSchema {
   cases: {
@@ -110,6 +111,23 @@ interface BackupFile {
   version: 1;
   exportedAt: string;
   cases: PreopCase[];
+}
+
+/**
+ * All cases with identifiers removed and dates cut to the year, for a copy
+ * that can be synced or shared. Returns the redactions made so they can be
+ * reviewed before the file leaves the device.
+ */
+export async function exportDeidentified(): Promise<{ json: string; redactions: Redaction[] }> {
+  const { cases, redactions } = deidentifyCases(await listCases());
+  const payload = {
+    app: 'preop-app',
+    version: 1,
+    deidentified: true,
+    exportedAt: new Date().toISOString(),
+    cases,
+  };
+  return { json: JSON.stringify(payload, null, 2), redactions };
 }
 
 /** All cases as a JSON backup file the user can keep off-device. */

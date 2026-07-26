@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listCases, createCase, deleteCase, exportCases, importCases } from '../lib/db';
+import { listCases, createCase, deleteCase, exportCases, exportDeidentified, importCases } from '../lib/db';
+import type { Redaction } from '../lib/deidentify';
 import type { PreopCase } from '../types';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
 import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
@@ -10,6 +11,7 @@ export default function CaseList() {
   const [cases, setCases] = useState<PreopCase[]>([]);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
+  const [redactions, setRedactions] = useState<Redaction[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -19,16 +21,30 @@ export default function CaseList() {
     ensurePersistentStorage().then(setStorage);
   }, []);
 
-  async function handleExport() {
-    const json = await exportCases();
+  function downloadJson(json: string, filename: string) {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `preop-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-    setBackupMessage(`Exported ${cases.length} case${cases.length === 1 ? '' : 's'}.`);
+  }
+
+  async function handleExport() {
+    const json = await exportCases();
+    downloadJson(json, `preop-backup-${new Date().toISOString().slice(0, 10)}.json`);
+    setRedactions(null);
+    setBackupMessage(`Exported ${cases.length} case${cases.length === 1 ? '' : 's'} (full copy, keep on-device).`);
+  }
+
+  async function handleExportDeidentified() {
+    const { json, redactions: made } = await exportDeidentified();
+    downloadJson(json, `preop-deidentified-${new Date().toISOString().slice(0, 10)}.json`);
+    setRedactions(made);
+    setBackupMessage(
+      `Exported ${cases.length} case${cases.length === 1 ? '' : 's'} de-identified: CSN and label dropped, dates cut to the year.`,
+    );
   }
 
   async function handleImportFile(file: File) {
@@ -65,8 +81,11 @@ export default function CaseList() {
         <button className="small" onClick={handleExport} disabled={cases.length === 0}>
           Export backup
         </button>
+        <button className="small" onClick={handleExportDeidentified} disabled={cases.length === 0}>
+          Export de-identified
+        </button>
         <button className="small" onClick={() => fileInputRef.current?.click()}>
-          Restore backup
+          Restore
         </button>
         <input
           ref={fileInputRef}
@@ -81,6 +100,36 @@ export default function CaseList() {
         />
       </div>
       {backupMessage && <p className="muted small">{backupMessage}</p>}
+
+      {redactions && (
+        <div className="card warning-card">
+          <h4>Check before sharing that file</h4>
+          {redactions.length === 0 ? (
+            <p className="muted small">
+              Nothing else looked like an identifier. Free text is only scanned for obvious patterns though - read the
+              clinical fields yourself before the file leaves your control.
+            </p>
+          ) : (
+            <>
+              <p className="muted small">Removed {redactions.length} item(s):</p>
+              <ul className="redaction-list">
+                {redactions.map((r, i) => (
+                  <li key={i}>
+                    <strong>{r.location}</strong> - {r.kind}: <code>{r.original}</code>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="muted small">
+            Dates are reduced to the year and CSN is dropped, but nothing can guarantee dictated text is clean. A
+            rare procedure in a small program can still narrow to one patient.
+          </p>
+          <button className="small" onClick={() => setRedactions(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {storage?.state === 'persisted' && (
         <p className="muted small">
@@ -112,7 +161,8 @@ export default function CaseList() {
               <div>
                 <strong>{displayCaseLabel(c)}</strong>
                 <div className="muted small">
-                  {formatWeekday(c.caseDate)} - {procedure?.label || dictatedProcedure || 'No procedure yet'}
+                  {formatWeekday(c.caseDate)}
+                  {c.rotation ? ` - ${c.rotation}` : ''} - {procedure?.label || dictatedProcedure || 'No procedure yet'}
                 </div>
               </div>
               <button className="danger small" onClick={(e) => handleDelete(c.id, e)}>

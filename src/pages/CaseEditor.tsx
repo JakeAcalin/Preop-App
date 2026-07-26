@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getCase, saveCase, nextCaseNumber } from '../lib/db';
 import type { PreopCase } from '../types';
 import { PROCEDURES } from '../data/procedures';
+import { ROTATIONS } from '../data/rotations';
 import {
   addDays,
   buildCaseLabel,
@@ -78,6 +79,21 @@ export default function CaseEditor() {
             Next Monday
           </button>
         </div>
+
+        <label>
+          Rotation
+          <select
+            value={preopCase.rotation ?? ''}
+            onChange={(e) => updateCase((c) => ({ ...c, rotation: e.target.value || undefined, updatedAt: Date.now() }))}
+          >
+            <option value="">Not set</option>
+            {ROTATIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label>
           Label override (optional)
