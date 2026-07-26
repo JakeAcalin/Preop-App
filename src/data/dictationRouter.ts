@@ -1,62 +1,6 @@
-import { FIELDS } from './fields';
 import type { FieldDef } from '../types';
 
-export interface RoutedFragment {
-  fieldId: string | null; // null = unsorted
-  text: string;
-}
-
-// Fields ranked by longest/most specific keyword first, so e.g. "hemoglobin"
-// matches CBC before a shorter generic keyword could steal it. For
-// select/multiselect fields, each preset option (e.g. "EKG", "Pulse Ox" on
-// Monitors) is also a routing keyword - otherwise dictating an option's name
-// would never even reach that field for applyDictatedText to match against.
-const RANKED_FIELDS: { field: FieldDef; keyword: string }[] = FIELDS.flatMap((field) => {
-  const optionKeywords = field.type === 'select' || field.type === 'multiselect' ? (field.options ?? []) : [];
-  return [...field.keywords, ...optionKeywords].map((keyword) => ({ field, keyword: keyword.toLowerCase() }));
-}).sort((a, b) => b.keyword.length - a.keyword.length);
-
-// Unlikely-to-appear token used to protect decimal points from sentence splitting.
-const DECIMAL_TOKEN = ' DECIMAL ';
-
-// Split a raw dictation transcript into rough clauses. Speech recognition
-// output is usually unpunctuated, so we split on light conjunctions/fillers
-// in addition to any punctuation the recognizer does provide.
-export function splitIntoClauses(transcript: string): string[] {
-  const withBreaks = transcript
-    // Protect decimal points (e.g. "11.2", "1.5") before splitting on sentence-ending periods.
-    .split(/(\d\.\d)/)
-    .map((chunk) => (/^\d\.\d$/.test(chunk) ? chunk.replace('.', DECIMAL_TOKEN) : chunk))
-    .join('')
-    .replace(/[.;]/g, '\n')
-    .split(DECIMAL_TOKEN)
-    .join('.')
-    .replace(/\b(also|additionally|next|and also)\b/gi, '\n$1');
-
-  return withBreaks
-    .split('\n')
-    .map((c) => c.trim())
-    .filter((c) => c.length > 0);
-}
-
-export function routeClause(clause: string): string | null {
-  const lower = clause.toLowerCase();
-  for (const { field, keyword } of RANKED_FIELDS) {
-    if (lower.includes(keyword)) {
-      return field.id;
-    }
-  }
-  return null;
-}
-
-export function routeTranscript(transcript: string): RoutedFragment[] {
-  return splitIntoClauses(transcript).map((text) => ({
-    fieldId: routeClause(text),
-    text,
-  }));
-}
-
-// Merge a new fragment's text into an existing free-text field value.
+// Merge a new fragment of text into an existing free-text field value.
 export function appendToValue(existing: string | undefined, addition: string): string {
   const trimmed = addition.trim();
   if (!existing || existing.trim().length === 0) return trimmed;
@@ -104,8 +48,9 @@ export type ApplyDictationResult =
  *    this never produces anything but a string[], so it's always safe for
  *    the chip UI to render.
  *  - select: matched against the option list; only a confident match is
- *    applied. With no match, the fragment is routed back to "unsorted"
- *    rather than jamming un-matched text into a single-choice dropdown.
+ *    applied. With no match the caller is told nothing was applied, so the
+ *    user can pick the right option rather than having a single-choice
+ *    dropdown filled with unmatched text.
  */
 export function applyDictatedText(
   field: FieldDef,

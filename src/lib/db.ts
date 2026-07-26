@@ -44,15 +44,42 @@ export async function deleteCase(id: string): Promise<void> {
   await db.delete('cases', id);
 }
 
-export function newCase(patientLabel: string, procedureType: string): PreopCase {
+function formatDateLabel(date: Date): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Builds the next case label for today, e.g. "07/25/26; Case 1". The case
+ * number counts cases created on the same calendar day, so it restarts at 1
+ * each morning.
+ */
+export async function nextCaseLabel(): Promise<string> {
+  const now = new Date();
+  const existing = await listCases();
+  const todayCount = existing.filter((c) => isSameDay(new Date(c.createdAt), now)).length;
+  return `${formatDateLabel(now)}; Case ${todayCount + 1}`;
+}
+
+export async function createCase(): Promise<PreopCase> {
   const now = Date.now();
-  return {
+  const preopCase: PreopCase = {
     id: crypto.randomUUID(),
     createdAt: now,
     updatedAt: now,
-    patientLabel,
-    procedureType,
+    patientLabel: await nextCaseLabel(),
+    procedureType: '',
     values: {},
     unsorted: [],
   };
+  await saveCase(preopCase);
+  return preopCase;
 }

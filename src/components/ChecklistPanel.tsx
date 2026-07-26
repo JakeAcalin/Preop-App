@@ -1,9 +1,13 @@
-import { useMemo, useState } from 'react';
-import type { PreopCase } from '../types';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import type { FieldDef, PreopCase } from '../types';
 import { FIELDS, SECTIONS } from '../data/fields';
 import { applyDictatedText } from '../data/dictationRouter';
+import { correctMedicalText } from '../lib/textCorrection';
+import { parseSpeech, type VoiceCommand } from '../lib/voiceCommands';
+import { resolveCaseProcedure } from '../lib/caseProcedure';
+import { useVoiceSession } from '../hooks/useVoiceSession';
 import FieldInput from './FieldInput';
-import MicButton from './MicButton';
+import ProcedureNotes from './ProcedureNotes';
 
 interface Props {
   preopCase: PreopCase;
@@ -16,80 +20,222 @@ function isEmpty(value: string | string[] | undefined): boolean {
   return value.trim().length === 0;
 }
 
+function describeValue(value: string | string[] | undefined): string {
+  if (isEmpty(value)) return 'empty';
+  return Array.isArray(value) ? value.join(', ') : (value as string);
+}
+
 export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
-  const missingRequired = useMemo(
-    () => FIELDS.filter((f) => f.required && isEmpty(preopCase.values[f.id])),
+  const [guiding, setGuiding] = useState(false);
+  const [index, setIndex] = useState(0);
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const [lastAction, setLastAction] = useState<string | null>(null);
+  const [unmatchedSelect, setUnmatchedSelect] = useState<string | null>(null);
+
+  const guidedFields = useMemo(
+    () => (onlyMissing ? FIELDS.filter((f) => f.required && isEmpty(preopCase.values[f.id])) : FIELDS),
+    [onlyMissing, preopCase.values],
+  );
+
+  const missingRequiredCount = useMemo(
+    () => FIELDS.filter((f) => f.required && isEmpty(preopCase.values[f.id])).length,
     [preopCase.values],
   );
-  const [walkIndex, setWalkIndex] = useState(0);
-  const [walking, setWalking] = useState(false);
+
+  const procedure = useMemo(() => resolveCaseProcedure(preopCase), [preopCase]);
+  const procedureInferred = !preopCase.procedureType && Boolean(procedure);
+
+  // Voice handlers run inside a long-lived recognition callback, so they read
+  // the current field/index through refs rather than stale closure values.
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const guidedFieldsRef = useRef(guidedFields);
+  guidedFieldsRef.current = guidedFields;
 
   function setFieldValue(fieldId: string, value: string | string[]) {
     onUpdateCase((c) => ({ ...c, values: { ...c.values, [fieldId]: value }, updatedAt: Date.now() }));
   }
 
-  // Returns whether the text was actually applied to the field (false means a
-  // select field had no confident match - caller should leave it for manual pick
-  // rather than silently discarding the dictated/unsorted text).
-  function dictateIntoField(fieldId: string, text: string): boolean {
-    if (!text.trim()) return false;
-    const field = FIELDS.find((f) => f.id === fieldId);
-    if (!field) return false;
-    const result = applyDictatedText(field, preopCase.values[fieldId], text);
-    if (result.kind !== 'value') return false;
-    onUpdateCase((c) => ({ ...c, values: { ...c.values, [fieldId]: result.value }, updatedAt: Date.now() }));
-    return true;
+  const enterTextIntoField = useCallback(
+    (field: FieldDef, rawText: string): boolean => {
+      const cleaned = correctMedicalText(rawText);
+      if (!cleaned) return false;
+
+      let applied = false;
+      onUpdateCase((c) => {
+        const result = applyDictatedText(field, c.values[field.id], cleaned);
+        if (result.kind !== 'value') return c;
+        applied = true;
+        return { ...c, values: { ...c.values, [field.id]: result.value }, updatedAt: Date.now() };
+      });
+
+      if (applied) {
+        setLastAction(`Added to ${field.label}: "${cleaned}"`);
+        setUnmatchedSelect(null);
+      } else {
+        setUnmatchedSelect(`"${cleaned}" didn't match an option for ${field.label} - pick one below.`);
+      }
+      return applied;
+    },
+    [onUpdateCase],
+  );
+
+  const runCommand = useCallback((command: VoiceCommand) => {
+    const fields = guidedFieldsRef.current;
+    const current = indexRef.current;
+
+    switch (command) {
+      case 'next':
+      case 'skip':
+        if (current + 1 < fields.length) {
+          setIndex(current + 1);
+          setLastAction(command === 'skip' ? 'Skipped' : 'Next field');
+        } else {
+          setLastAction('End of list');
+        }
+        break;
+      case 'back':
+        if (current > 0) {
+          setIndex(current - 1);
+          setLastAction('Previous field');
+        }
+        break;
+      case 'clear': {
+        const field = fields[current];
+        if (field) {
+          setFieldValue(field.id, field.type === 'multiselect' ? [] : '');
+          setLastAction(`Cleared ${field.label}`);
+        }
+        break;
+      }
+      case 'stop':
+        stopVoice();
+        setLastAction('Stopped listening');
+        break;
+      case 'finish':
+        stopVoice();
+        setGuiding(false);
+        setLastAction('Finished walkthrough');
+        break;
+    }
+    setUnmatchedSelect(null);
+    // stopVoice is stable (from the hook) but declared below; referencing it
+    // here is fine because the callback only runs after mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleFinalChunk = useCallback(
+    (chunk: string) => {
+      const { content, command } = parseSpeech(chunk);
+      const field = guidedFieldsRef.current[indexRef.current];
+      if (content && field) {
+        enterTextIntoField(field, content);
+      }
+      if (command) runCommand(command);
+    },
+    [enterTextIntoField, runCommand],
+  );
+
+  const { supported, listening, interim, error, start, stop: stopVoice } = useVoiceSession({
+    onFinalChunk: handleFinalChunk,
+  });
+
+  const currentField = guiding ? guidedFields[index] : undefined;
+
+  function startGuided() {
+    setGuiding(true);
+    setIndex(0);
+    setLastAction(null);
+    setUnmatchedSelect(null);
   }
 
-  const currentField = walking ? missingRequired[walkIndex] : undefined;
+  function exitGuided() {
+    stopVoice();
+    setGuiding(false);
+  }
 
   return (
     <div className="checklist-panel">
       <div className="card">
-        <h3>Required-field walkthrough</h3>
-        {missingRequired.length === 0 ? (
-          <p className="success">All required fields are filled in.</p>
-        ) : !walking ? (
+        <div className="checklist-header">
+          <h3>Guided entry</h3>
+          {missingRequiredCount > 0 ? (
+            <span className="badge-missing">{missingRequiredCount} required missing</span>
+          ) : (
+            <span className="badge-ok">required complete</span>
+          )}
+        </div>
+
+        {!guiding ? (
           <>
-            <p className="muted">
-              {missingRequired.length} required field{missingRequired.length === 1 ? '' : 's'} still missing.
+            <p className="muted small">
+              Steps through each field so you can dictate hands-free. Say <strong>"next"</strong>, <strong>"back"</strong>,{' '}
+              <strong>"skip"</strong>, <strong>"scratch that"</strong>, or <strong>"stop listening"</strong> to move
+              around - you can tack a command onto the end of a sentence ("hypertension and diabetes, next").
             </p>
-            <button className="primary" onClick={() => { setWalking(true); setWalkIndex(0); }}>
-              Start walkthrough
+            <label className="checkbox-option">
+              <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
+              Only walk through missing required fields
+            </label>
+            <button className="primary" onClick={startGuided} disabled={guidedFields.length === 0}>
+              Start guided entry
             </button>
+            {guidedFields.length === 0 && <p className="success">Nothing left to fill in.</p>}
           </>
         ) : currentField ? (
           <div className="walkthrough-step">
             <p className="muted small">
-              Missing field {walkIndex + 1} of {missingRequired.length}
+              Field {index + 1} of {guidedFields.length}
+              {currentField.required ? ' - required' : ''}
             </p>
             <h4>{currentField.label}</h4>
+
             <FieldInput
               field={currentField}
               value={preopCase.values[currentField.id]}
               onChange={(v) => setFieldValue(currentField.id, v)}
             />
-            <MicButton
-              label={`Dictate: ${currentField.label}`}
-              onTranscriptChange={() => {}}
-              onStop={(text) => dictateIntoField(currentField.id, text)}
-            />
+
+            <p className="muted small current-value">Current: {describeValue(preopCase.values[currentField.id])}</p>
+
+            {!supported ? (
+              <p className="warning">
+                Speech recognition isn't supported in this browser - use Chrome or Safari, or type entries in directly.
+              </p>
+            ) : (
+              <div className="mic-control">
+                {!listening ? (
+                  <button className="primary mic-btn" onClick={start}>
+                    {'\u{1F3A4}'} Start hands-free dictation
+                  </button>
+                ) : (
+                  <button className="danger mic-btn" onClick={stopVoice}>
+                    {'⏹'} Stop listening
+                  </button>
+                )}
+                {listening && <span className="listening-indicator">Listening...</span>}
+              </div>
+            )}
+
+            {interim && <div className="live-transcript interim">{interim}</div>}
+            {lastAction && <p className="muted small">{lastAction}</p>}
+            {unmatchedSelect && <p className="warning small">{unmatchedSelect}</p>}
+            {error && <p className="warning small">{error}</p>}
+
             <div className="walkthrough-nav">
-              <button
-                disabled={walkIndex === 0}
-                onClick={() => setWalkIndex((i) => Math.max(0, i - 1))}
-              >
+              <button disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
                 Back
               </button>
               <button
                 className="primary"
                 onClick={() => {
-                  if (walkIndex + 1 >= missingRequired.length) setWalking(false);
-                  else setWalkIndex((i) => i + 1);
+                  if (index + 1 >= guidedFields.length) exitGuided();
+                  else setIndex((i) => i + 1);
                 }}
               >
-                {walkIndex + 1 >= missingRequired.length ? 'Finish' : 'Next'}
+                {index + 1 >= guidedFields.length ? 'Finish' : 'Next'}
               </button>
+              <button onClick={exitGuided}>Exit</button>
             </div>
           </div>
         ) : (
@@ -119,10 +265,12 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
         </div>
       ))}
 
+      {procedure && <ProcedureNotes procedure={procedure} inferred={procedureInferred} />}
+
       {preopCase.unsorted.length > 0 && (
         <div className="card">
-          <h4>Unsorted dictation</h4>
-          <p className="muted small">Phrases from dictation that weren't auto-matched. Assign or discard them.</p>
+          <h4>Unsorted notes</h4>
+          <p className="muted small">Left over from earlier dictation. Assign or discard them.</p>
           {preopCase.unsorted.map((note) => (
             <div className="unsorted-item" key={note.id}>
               <p>{note.text}</p>
@@ -130,13 +278,10 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
                 <select
                   defaultValue=""
                   onChange={(e) => {
-                    const fieldId = e.target.value;
-                    if (!fieldId) return;
-                    const applied = dictateIntoField(fieldId, note.text);
-                    if (applied) {
+                    const field = FIELDS.find((f) => f.id === e.target.value);
+                    if (!field) return;
+                    if (enterTextIntoField(field, note.text)) {
                       onUpdateCase((c) => ({ ...c, unsorted: c.unsorted.filter((n) => n.id !== note.id) }));
-                    } else {
-                      alert("Couldn't match that text to one of this field's preset options - pick the right option yourself in the field above, then discard this note.");
                     }
                   }}
                 >

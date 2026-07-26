@@ -115,20 +115,29 @@ export const PROCEDURES: ProcedureConsiderations[] = [
   {
     key: 'lap_chole',
     label: 'Laparoscopic Cholecystectomy',
-    aliases: ['lap chole', 'laparoscopic cholecystectomy', 'cholecystectomy'],
-    monitors: ['Standard ASA monitors'],
-    positioning: ['Supine, reverse Trendelenburg once pneumoperitoneum established'],
+    aliases: ['lap chole', 'laparoscopic cholecystectomy', 'cholecystectomy', 'lap choley'],
+    monitors: ['Standard ASA monitors', 'Consider NMT monitoring - deep block often requested for insufflation'],
+    positioning: [
+      'Supine, arms often tucked; reverse Trendelenburg + left tilt once pneumoperitoneum established',
+      'Position change shifts venous return - re-check BP after the table is tilted',
+    ],
     anestheticConsiderations: [
-      'GA with ETT typical (aspiration risk with pneumoperitoneum)',
-      'CO2 insufflation causes hypercarbia, increased peak airway pressures, decreased venous return on Trendelenburg-reversal changes',
-      'PONV prophylaxis important - high-risk case for PONV',
-      'Consider TAP block/local infiltration for multimodal analgesia',
+      'GA with ETT (not LMA) is typical - pneumoperitoneum raises intra-abdominal pressure and aspiration risk',
+      'CO2 insufflation: expect hypercarbia and a rising ETCO2 - increase minute ventilation to compensate',
+      'Insufflation raises peak airway pressures and reduces FRC - watch pressures, especially in obese/COPD patients',
+      'Increased intra-abdominal pressure reduces venous return and can drop cardiac output/BP at insufflation',
+      'Deep neuromuscular blockade is often requested to improve surgical working space',
+      'High PONV-risk case - give multimodal prophylaxis (e.g. ondansetron + dexamethasone)',
+      'Multimodal analgesia: local infiltration at port sites +/- TAP block reduces opioid need',
+      'Have a plan for conversion to open - larger incision, more blood loss, more analgesia required',
     ],
     complications: [
-      'CO2 embolism (rare)',
-      'Pneumothorax/subcutaneous emphysema',
-      'Vagal bradycardia with peritoneal insufflation',
-      'Bile duct/vascular injury requiring conversion to open',
+      'CO2 embolism (rare but catastrophic - sudden ETCO2 drop with hypotension)',
+      'Vagal bradycardia or asystole at peritoneal insufflation',
+      'Pneumothorax / subcutaneous emphysema from CO2 tracking',
+      'Endobronchial intubation as the diaphragm shifts cephalad with insufflation',
+      'Bile duct or vascular injury requiring conversion to open',
+      'Post-op shoulder tip pain from residual CO2',
     ],
   },
   {
@@ -159,15 +168,124 @@ export const PROCEDURES: ProcedureConsiderations[] = [
       'Airway edema with prolonged prone positioning (consider cuff leak check before extubation)',
     ],
   },
+  {
+    key: 'total_joint',
+    label: 'Total Hip / Knee Arthroplasty',
+    aliases: ['total hip', 'total knee', 'tha', 'tka', 'hip arthroplasty', 'knee arthroplasty', 'joint replacement'],
+    monitors: ['Standard ASA monitors', 'Arterial line only if significant cardiac disease'],
+    positioning: ['Lateral (hip) or supine (knee) - pad dependent limb, check axillary roll and peroneal nerve'],
+    anestheticConsiderations: [
+      'Spinal/neuraxial is common and may reduce blood loss, DVT risk, and PONV - confirm anticoagulation status first',
+      'Regional adjuncts: adductor canal block (knee), PENG/fascia iliaca (hip) for opioid-sparing analgesia',
+      'Tranexamic acid commonly given per protocol to reduce blood loss',
+      'Bone cement implantation syndrome risk if cemented - anticipate hypotension/hypoxia at cementing',
+      'Tourniquet (knee): expect hypertension with prolonged inflation and washout of acid metabolites on release',
+    ],
+    complications: [
+      'Bone cement implantation syndrome',
+      'Fat/marrow embolism',
+      'Significant blood loss',
+      'DVT/PE',
+      'Positioning-related nerve injury',
+    ],
+  },
+  {
+    key: 'egd_colonoscopy',
+    label: 'EGD / Colonoscopy',
+    aliases: ['egd', 'colonoscopy', 'endoscopy', 'upper endoscopy', 'esophagogastroduodenoscopy'],
+    monitors: ['Standard ASA monitors', 'Capnography essential - shared/unprotected airway in a dark remote location'],
+    positioning: ['Left lateral decubitus typically'],
+    anestheticConsiderations: [
+      'Usually MAC with propofol; airway is shared with the endoscopist and not protected',
+      'Assess aspiration risk carefully (GERD, gastric outlet obstruction, recent food, GLP-1 agonist use) - consider ETT instead of MAC',
+      'GLP-1 receptor agonists (semaglutide etc.) delay gastric emptying - check last dose and NPO status',
+      'Remote/off-site location: confirm suction, oxygen, airway equipment and help availability before starting',
+      'Brief but intensely stimulating moments (scope insertion) against minimal analgesic requirement afterward',
+    ],
+    complications: [
+      'Airway obstruction/laryngospasm during shared-airway manipulation',
+      'Aspiration',
+      'Hypoxemia from oversedation',
+      'Bowel perforation or bleeding (rare)',
+      'Vagal response with insufflation/scope advancement',
+    ],
+  },
+  {
+    key: 'cesarean',
+    label: 'Cesarean Section',
+    aliases: ['cesarean', 'c section', 'c-section', 'caesarean'],
+    monitors: ['Standard ASA monitors', 'Left uterine displacement essential', 'Arterial line only if severe preeclampsia/cardiac disease'],
+    positioning: ['Supine with left lateral tilt/wedge to avoid aortocaval compression'],
+    anestheticConsiderations: [
+      'Neuraxial (spinal) preferred; GA reserved for emergencies or contraindications to neuraxial',
+      'If GA: full stomach - RSI with cricoid, anticipate difficult airway (edema, breast tissue, weight gain)',
+      'Aspiration prophylaxis (sodium citrate, H2 blocker, metoclopramide) per protocol',
+      'Expect spinal-induced hypotension - phenylephrine infusion, adequate preload/co-load',
+      'Oxytocin after delivery causes vasodilation/tachycardia - give as an infusion, not a rapid bolus',
+      'Have uterotonics and a hemorrhage plan ready (methylergonovine, carboprost, TXA)',
+    ],
+    complications: [
+      'Postpartum hemorrhage / uterine atony',
+      'High or total spinal',
+      'Failed intubation (higher incidence in obstetric patients)',
+      'Aspiration',
+      'Amniotic fluid embolism (rare)',
+    ],
+  },
+  {
+    key: 'craniotomy',
+    label: 'Craniotomy',
+    aliases: ['craniotomy', 'crani', 'brain tumor resection', 'clipping'],
+    monitors: [
+      'Standard ASA monitors',
+      'Arterial line (pre-induction if raised ICP or tight hemodynamic control needed)',
+      'Large-bore IV access; consider CVC',
+      'Consider neuromonitoring depending on lesion location',
+    ],
+    positioning: [
+      'Supine/lateral/prone or sitting depending on approach; head in pins',
+      'Pinning is intensely stimulating - deepen anesthetic or infiltrate scalp beforehand',
+      'Sitting position carries venous air embolism risk - consider precordial Doppler',
+    ],
+    anestheticConsiderations: [
+      'Goal is a slack brain: maintain CPP, avoid hypercarbia, avoid hypotension and venous congestion',
+      'Smooth induction/emergence - avoid coughing and BP swings that raise ICP',
+      'Mannitol/hypertonic saline and mild hyperventilation may be requested to reduce brain bulk',
+      'Avoid nitrous oxide, particularly with pneumocephalus or sitting position',
+      'Plan for a rapid, calm wake-up to allow early neuro exam',
+    ],
+    complications: [
+      'Raised ICP / brain herniation',
+      'Venous air embolism (especially sitting position)',
+      'Major blood loss from venous sinus injury',
+      'Seizures',
+      'Delayed emergence complicating neuro assessment',
+    ],
+  },
 ];
 
+/**
+ * Finds procedure considerations from free text (e.g. the dictated "Planned
+ * Surgery/Procedure" field), matching on key, label, or any alias appearing
+ * anywhere in the text. Longer aliases win so "laparoscopic cholecystectomy"
+ * beats a bare "cholecystectomy" entry.
+ */
 export function findProcedureByLabelOrAlias(query: string): ProcedureConsiderations | undefined {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return undefined;
-  return PROCEDURES.find(
-    (p) =>
-      p.key === normalized ||
-      p.label.toLowerCase() === normalized ||
-      p.aliases.some((a) => normalized.includes(a)),
-  );
+
+  const exact = PROCEDURES.find((p) => p.key === normalized || p.label.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  let best: ProcedureConsiderations | undefined;
+  let bestAliasLength = 0;
+  for (const procedure of PROCEDURES) {
+    for (const alias of procedure.aliases) {
+      if (normalized.includes(alias) && alias.length > bestAliasLength) {
+        best = procedure;
+        bestAliasLength = alias.length;
+      }
+    }
+  }
+  return best;
 }

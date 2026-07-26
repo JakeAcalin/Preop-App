@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { PreopCase } from '../types';
 import { FIELDS, SECTIONS } from '../data/fields';
-import { PROCEDURES } from '../data/procedures';
+import { resolveCaseProcedure } from '../lib/caseProcedure';
+import ProcedureNotes from './ProcedureNotes';
 
 interface Props {
   preopCase: PreopCase;
@@ -31,8 +32,9 @@ function buildPlainTextSummary(preopCase: PreopCase, procedureLabel: string): st
 
 export default function SummaryPanel({ preopCase }: Props) {
   const [copied, setCopied] = useState(false);
-  const procedure = PROCEDURES.find((p) => p.key === preopCase.procedureType);
-  const procedureLabel = procedure?.label ?? preopCase.procedureType ?? 'Not set';
+  const procedure = resolveCaseProcedure(preopCase);
+  const dictatedProcedure = typeof preopCase.values.plannedProcedure === 'string' ? preopCase.values.plannedProcedure : '';
+  const procedureLabel = procedure?.label || dictatedProcedure || 'Not set';
 
   async function handleCopy() {
     const text = buildPlainTextSummary(preopCase, procedureLabel);
@@ -80,58 +82,11 @@ export default function SummaryPanel({ preopCase }: Props) {
         );
       })}
 
-      {procedure && (
-        <div className="card procedure-card">
-          <h3>Anesthetic considerations - {procedure.label}</h3>
-          <p className="muted small">
-            Reference notes you've curated for this procedure type - review/edit in the knowledge base, not a live
-            external lookup.
-          </p>
-
-          <h5>Monitors</h5>
-          <ul>
-            {procedure.monitors.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          <h5>Positioning</h5>
-          <ul>
-            {procedure.positioning.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          <h5>Anesthetic considerations</h5>
-          <ul>
-            {procedure.anestheticConsiderations.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          <h5>Potential complications</h5>
-          <ul>
-            {procedure.complications.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          {procedure.equipment && procedure.equipment.length > 0 && (
-            <>
-              <h5>Equipment / other</h5>
-              <ul>
-                {procedure.equipment.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      {procedure && <ProcedureNotes procedure={procedure} inferred={!preopCase.procedureType} />}
 
       {preopCase.unsorted.length > 0 && (
         <div className="card warning-card">
-          <h4>Unreviewed dictation ({preopCase.unsorted.length})</h4>
+          <h4>Unsorted notes ({preopCase.unsorted.length})</h4>
           <p className="muted small">Go to Checklist to assign these before presenting.</p>
         </div>
       )}
