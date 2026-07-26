@@ -5,6 +5,7 @@ import { applyDictatedText } from '../data/dictationRouter';
 import { correctMedicalText } from '../lib/textCorrection';
 import { parseSpeech, type VoiceCommand } from '../lib/voiceCommands';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
+import { optionsForField } from '../lib/caseOptions';
 import { derivePatientWeights } from '../lib/weights';
 import { calculateDoses } from '../lib/doseCalc';
 import { useVoiceSession } from '../hooks/useVoiceSession';
@@ -76,20 +77,30 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
   }
 
   const enterTextIntoField = useCallback(
-    (field: FieldDef, rawText: string): boolean => {
+    (field: FieldDef, rawText: string, alternatives: string[] = []): boolean => {
       const cleaned = correctMedicalText(rawText);
       if (!cleaned) return false;
 
+      // For a dropdown, the recogniser's top guess is often wrong where a
+      // later candidate matches an option exactly - try them in order.
+      const candidates = [cleaned, ...alternatives.map(correctMedicalText).filter(Boolean)];
+
       let applied = false;
+      let usedText = cleaned;
       onUpdateCase((c) => {
-        const result = applyDictatedText(field, c.values[field.id], cleaned);
-        if (result.kind !== 'value') return c;
-        applied = true;
-        return { ...c, values: { ...c.values, [field.id]: result.value }, updatedAt: Date.now() };
+        const options = optionsForField(field, c.values);
+        for (const candidate of candidates) {
+          const result = applyDictatedText(field, c.values[field.id], candidate, options);
+          if (result.kind !== 'value') continue;
+          applied = true;
+          usedText = candidate;
+          return { ...c, values: { ...c.values, [field.id]: result.value }, updatedAt: Date.now() };
+        }
+        return c;
       });
 
       if (applied) {
-        setLastAction(`Added to ${field.label}: "${cleaned}"`);
+        setLastAction(`Added to ${field.label}: "${usedText}"`);
         setUnmatchedSelect(null);
       } else {
         setUnmatchedSelect(`"${cleaned}" didn't match an option for ${field.label} - pick one below.`);
@@ -144,11 +155,17 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
   }, []);
 
   const handleFinalChunk = useCallback(
-    (chunk: string) => {
+    (chunk: string, alternatives: string[] = []) => {
       const { content, command } = parseSpeech(chunk);
       const field = guidedFieldsRef.current[indexRef.current];
       if (content && field) {
-        enterTextIntoField(field, content);
+        // Alternatives are for the same audio, so strip any trailing command
+        // off them too before offering them as candidates.
+        enterTextIntoField(
+          field,
+          content,
+          alternatives.map((alt) => parseSpeech(alt).content).filter(Boolean),
+        );
       }
       if (command) runCommand(command);
     },
@@ -213,6 +230,7 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
               field={currentField}
               value={preopCase.values[currentField.id]}
               onChange={(v) => setFieldValue(currentField.id, v)}
+              options={optionsForField(currentField, preopCase.values)}
             />
 
             <DoseHints drugs={calculateDoses(preopCase.values[currentField.id], weights)} />
@@ -281,6 +299,7 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
                   field={field}
                   value={preopCase.values[field.id]}
                   onChange={(v) => setFieldValue(field.id, v)}
+                  options={optionsForField(field, preopCase.values)}
                 />
                 <DoseHints drugs={calculateDoses(preopCase.values[field.id], weights)} />
               </div>

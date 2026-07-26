@@ -6,12 +6,15 @@ interface Props {
   field: FieldDef;
   value: string | string[] | undefined;
   onChange: (value: string | string[]) => void;
+  /** Overrides field.options where the choices depend on the case. */
+  options?: string[];
 }
 
-function TagPicker({ field, value, onChange }: Props) {
+function TagPicker({ field, value, onChange, options }: Props) {
   const [customText, setCustomText] = useState('');
   const values = Array.isArray(value) ? value : [];
-  const remainingOptions = (field.options ?? []).filter((opt) => !values.includes(opt));
+  const allOptions = options ?? field.options ?? [];
+  const remainingOptions = allOptions.filter((opt) => !values.includes(opt));
 
   function addTag(tag: string) {
     const trimmed = tag.trim();
@@ -90,7 +93,7 @@ function TagPicker({ field, value, onChange }: Props) {
   );
 }
 
-export default function FieldInput({ field, value, onChange }: Props) {
+export default function FieldInput({ field, value, onChange, options }: Props) {
   if (field.type === 'textarea') {
     return (
       <textarea
@@ -106,7 +109,7 @@ export default function FieldInput({ field, value, onChange }: Props) {
     return (
       <select value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">-- not set --</option>
-        {field.options?.map((opt) => (
+        {(options ?? field.options)?.map((opt) => (
           <option key={opt} value={opt}>
             {opt}
           </option>
@@ -116,7 +119,7 @@ export default function FieldInput({ field, value, onChange }: Props) {
   }
 
   if (field.type === 'multiselect') {
-    return <TagPicker field={field} value={value} onChange={onChange} />;
+    return <TagPicker field={field} value={value} onChange={onChange} options={options} />;
   }
 
   return (

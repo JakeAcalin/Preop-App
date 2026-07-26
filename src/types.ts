@@ -15,6 +15,8 @@ export interface FieldDef {
   placeholder?: string;
   /** Keywords/phrases used by the dictation router to detect this field in free speech. */
   keywords: string[];
+  /** Appends any infusion selected elsewhere in the case to this field's options. */
+  includeCaseInfusions?: boolean;
 }
 
 export interface SectionDef {

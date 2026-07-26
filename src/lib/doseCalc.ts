@@ -133,8 +133,21 @@ function infusionLine(
   const kg = weights.tbwKg;
   let detail: string | undefined;
   if (kg !== undefined && variant.unit.startsWith('mcg/kg')) {
-    const perTime = variant.unit === 'mcg/kg/min' ? 'mcg/min' : 'mcg/hr';
-    detail = `= ${formatRange(variant.low * kg, variant.high !== undefined ? variant.high * kg : undefined, perTime)} at ${Math.round(kg)} kg`;
+    const perMinute = variant.unit === 'mcg/kg/min';
+    let low = variant.low * kg;
+    let high = variant.high !== undefined ? variant.high * kg : undefined;
+    let unit = perMinute ? 'mcg/min' : 'mcg/hr';
+
+    // Thousands of mcg/min is nobody's mental model - propofol and the like
+    // are set in mg/hr, so switch units once the number gets unwieldy.
+    if (low >= 1000) {
+      const toMgPerHour = perMinute ? 60 / 1000 : 1 / 1000;
+      low *= toMgPerHour;
+      if (high !== undefined) high *= toMgPerHour;
+      unit = 'mg/hr';
+    }
+
+    detail = `= ${formatRange(low, high, unit)} at ${Math.round(kg)} kg`;
   }
 
   return { indication: variant.indication, dose: rate, detail, note: variant.note };

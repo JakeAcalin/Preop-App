@@ -171,7 +171,7 @@ export const MEDICAL_VOCAB: VocabEntry[] = [
   { display: 'DVT', variants: ['dvt', 'd v t'] },
   { display: 'PE', variants: ['p e'] },
   { display: 'CVA', variants: ['cva', 'c v a'] },
-  { display: 'PONV', variants: ['ponv', 'p o n v', 'pawn v'] },
+  { display: 'PONV', variants: ['ponv', 'p o n v', 'pawn v', 'piano v', 'piano vee', 'pono v', 'pon v'] },
   { display: 'malignant hyperthermia', variants: ['malignant hyper thermia'] },
   { display: 'pulmonary hypertension', variants: ['pulmonary hyper tension'] },
   { display: 'cirrhosis', variants: ['sir osis', 'ser osis'] },
@@ -227,3 +227,24 @@ export const MEDICAL_VOCAB: VocabEntry[] = [
 
 // Filler words stripped from dictated text.
 export const FILLER_WORDS = ['um', 'uh', 'er', 'ah', 'hmm', 'mmm', 'like i said'];
+
+/**
+ * Whole-phrase rewrites for things speech recognition mangles badly enough
+ * that word-level correction can't recover them - social history in
+ * particular ("doesn't drink or do drugs" comes back as nonsense).
+ * Applied before any other correction; add your own as you hit them.
+ */
+export const PHRASE_CORRECTIONS: { wrong: RegExp; right: string }[] = [
+  { wrong: /\bdodger king or drish\b/gi, right: "doesn't drink or do drugs" },
+  { wrong: /\bdoesn'?t drink or do drugs\b/gi, right: 'Denies alcohol and drugs' },
+  { wrong: /\bdoes not drink or do drugs\b/gi, right: 'Denies alcohol and drugs' },
+  { wrong: /\bno alcohol or drugs?\b/gi, right: 'Denies alcohol and drugs' },
+  { wrong: /\bdenies (tobacco|smoking),? (alcohol),? (and )?(drugs?|illicits?)\b/gi, right: 'Denies tobacco, alcohol, and drugs' },
+  { wrong: /\bno tobacco,? (alcohol|etoh),? (or|and) drugs?\b/gi, right: 'Denies tobacco, alcohol, and drugs' },
+  { wrong: /\bhigh piano v\b/gi, right: 'high PONV' },
+  { wrong: /\bpiano v risk\b/gi, right: 'PONV risk' },
+  { wrong: /\bnothing by mouth\b/gi, right: 'NPO' },
+  { wrong: /\blarge bore i ?vs?\b/gi, right: 'large bore IV' },
+  { wrong: /\btwo large bore\b/gi, right: '2 large bore' },
+  { wrong: /\ba line\b/gi, right: 'A-line' },
+];

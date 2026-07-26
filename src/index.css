@@ -540,6 +540,70 @@ button:disabled {
   gap: 12px;
 }
 
+.summary-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Printing the Summary tab is how a PDF gets made (iOS: Share > Print >
+   Save to Files), so strip the app chrome and lay it out for paper. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  :root {
+    --text: #000;
+    --text-h: #000;
+    --bg: #fff;
+    --card-bg: #fff;
+    --border: #999;
+    --muted: #444;
+    --accent: #000;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  #root {
+    max-width: none;
+  }
+
+  .page {
+    padding: 0;
+  }
+
+  /* Navigation, inputs and controls have no meaning on paper. */
+  .tabs,
+  .case-header,
+  .link-btn,
+  .summary-actions,
+  .checklist-panel,
+  .new-case-btn,
+  .dose-line-note {
+    display: none !important;
+  }
+
+  .card {
+    border: none;
+    border-bottom: 1px solid #999;
+    border-radius: 0;
+    padding: 6px 0;
+    margin-bottom: 6px;
+    break-inside: avoid;
+  }
+
+  .summary-row {
+    break-inside: avoid;
+  }
+
+  .procedure-card {
+    break-before: page;
+  }
+}
+
 .summary-dl {
   margin: 0;
 }

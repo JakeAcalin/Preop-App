@@ -1,4 +1,4 @@
-import { MEDICAL_VOCAB, FILLER_WORDS } from '../data/medicalVocab';
+import { MEDICAL_VOCAB, FILLER_WORDS, PHRASE_CORRECTIONS } from '../data/medicalVocab';
 
 // --- Lookup tables built once from the vocabulary ---
 
@@ -133,6 +133,11 @@ export function correctMedicalText(raw: string): string {
   if (!raw.trim()) return '';
 
   let text = ` ${raw} `;
+
+  // 0. Whole-phrase rewrites for badly mangled stock phrases.
+  for (const { wrong, right } of PHRASE_CORRECTIONS) {
+    text = text.replace(wrong, right);
+  }
 
   // 1. Multi-word mis-hearings first (longest match wins).
   for (const rule of PHRASE_RULES) {

@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // Minimal ambient typing for the Web Speech API (not in lib.dom.d.ts).
 interface SpeechRecognitionResultLike {
   isFinal: boolean;
+  length: number;
   0: { transcript: string };
+  [index: number]: { transcript: string };
 }
 interface SpeechRecognitionEventLike extends Event {
   resultIndex: number;
@@ -15,6 +17,7 @@ interface SpeechRecognitionErrorEventLike extends Event {
 interface SpeechRecognitionLike extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
+  maxAlternatives: number;
   lang: string;
   start(): void;
   stop(): void;
@@ -39,8 +42,12 @@ export function isSpeechRecognitionSupported(): boolean {
 }
 
 interface UseVoiceSessionOptions {
-  /** Called for each finalised chunk of speech, as soon as it's recognised. */
-  onFinalChunk: (text: string) => void;
+  /**
+   * Called for each finalised chunk of speech, as soon as it's recognised.
+   * `alternatives` holds the recogniser's other candidates for the same
+   * audio, best first, so the caller can pick whichever fits the field.
+   */
+  onFinalChunk: (text: string, alternatives: string[]) => void;
 }
 
 interface UseVoiceSessionResult {
@@ -86,6 +93,9 @@ export function useVoiceSession({ onFinalChunk }: UseVoiceSessionOptions): UseVo
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
+    // Medical terms are often the recogniser's second or third guess, so keep
+    // the alternates around for option matching.
+    recognition.maxAlternatives = 5;
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
@@ -95,7 +105,13 @@ export function useVoiceSession({ onFinalChunk }: UseVoiceSessionOptions): UseVo
         const transcript = result[0].transcript;
         if (result.isFinal) {
           const trimmed = transcript.trim();
-          if (trimmed) onFinalChunkRef.current(trimmed);
+          if (!trimmed) continue;
+          const alternatives: string[] = [];
+          for (let a = 1; a < (result.length ?? 1); a++) {
+            const alt = result[a]?.transcript?.trim();
+            if (alt) alternatives.push(alt);
+          }
+          onFinalChunkRef.current(trimmed, alternatives);
         } else {
           interimText += transcript;
         }
@@ -104,9 +120,10 @@ export function useVoiceSession({ onFinalChunk }: UseVoiceSessionOptions): UseVo
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
-      // "no-speech" and "aborted" are routine during a long session; the
-      // onend handler restarts us, so don't surface them as failures.
-      if (event.error === 'no-speech' || event.error === 'aborted') return;
+      // These are routine during a long session - the mic drops out between
+      // utterances or the browser ends a run. The onend handler restarts us,
+      // so don't surface them as failures.
+      if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'audio-capture') return;
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         wantListeningRef.current = false;
         setError('Microphone access was blocked. Allow mic access for this site, then try again.');

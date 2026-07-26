@@ -18,9 +18,9 @@ function buildPlainTextSummary(
   weights: PatientWeights,
 ): string {
   const lines: string[] = [];
-  lines.push(`Case: ${displayCaseLabel(preopCase)} (${formatWeekday(preopCase.caseDate)})`);
-  lines.push(`Procedure: ${procedureLabel}`);
-  lines.push('');
+  lines.push(displayCaseLabel(preopCase));
+  lines.push(`${formatWeekday(preopCase.caseDate)} | ${procedureLabel}`);
+
   for (const section of SECTIONS) {
     const fields = FIELDS.filter((f) => f.section === section.id);
     const filled = fields.filter((f) => {
@@ -28,11 +28,16 @@ function buildPlainTextSummary(
       return v !== undefined && (Array.isArray(v) ? v.length > 0 : v.trim().length > 0);
     });
     if (filled.length === 0) continue;
-    lines.push(`${section.label.toUpperCase()}`);
+
+    lines.push('');
+    lines.push(section.label.toUpperCase());
+
     for (const f of filled) {
       const v = preopCase.values[f.id];
-      const value = Array.isArray(v) ? v.join(', ') : v;
-      // Only the selected/primary dose goes in the copyable text - the full
+      // Multi-valued fields read better as a bulleted list than a long
+      // comma-run when pasted into a note.
+      const value = Array.isArray(v) ? v.join(', ') : v.replace(/\s*;\s*/g, '; ');
+      // Only the selected/primary dose goes in the pasted text - the full
       // variant list is reference material for the screen, not the handoff.
       const doses = calculateDoses(v, weights)
         .map((drug) => {
@@ -40,10 +45,12 @@ function buildPlainTextSummary(
           return primary ? `${drug.label} ${primary.dose}` : null;
         })
         .filter(Boolean);
-      lines.push(`- ${f.label}: ${value}${doses.length > 0 ? ` [${doses.join('; ')}]` : ''}`);
+
+      lines.push(`  ${f.label}: ${value}`);
+      if (doses.length > 0) lines.push(`    doses: ${doses.join('; ')}`);
     }
-    lines.push('');
   }
+
   return lines.join('\n');
 }
 
@@ -70,9 +77,12 @@ export default function SummaryPanel({ preopCase }: Props) {
             <h2>{displayCaseLabel(preopCase)}</h2>
             <p className="muted">{procedureLabel}</p>
           </div>
-          <button className="primary" onClick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy summary'}
-          </button>
+          <div className="summary-actions">
+            <button className="primary" onClick={handleCopy}>
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button onClick={() => window.print()}>Save as PDF</button>
+          </div>
         </div>
       </div>
 

@@ -12,9 +12,26 @@ export const SECTIONS: SectionDef[] = [
 // Drug/dose presets are seeded from your own template - treat them as your
 // personal quick-pick list, editable here, not a formulary recommendation.
 const ANESTHESIA_TYPE_OPTIONS = ['General', 'MAC', 'Regional', 'Neuraxial', 'General + Regional'];
-const ASA_OPTIONS = ['ASA 1', 'ASA 2', 'ASA 3', 'ASA 4', 'ASA 5', 'ASA 6', 'ASA 1E', 'ASA 2E', 'ASA 3E', 'ASA 4E', 'ASA 5E'];
+// Borderline classifications are included because patients often sit between
+// two - "he's a 2 or a 3" is a real answer, not indecision.
+const ASA_OPTIONS = [
+  'ASA 1', 'ASA 1-2', 'ASA 2', 'ASA 2-3', 'ASA 3', 'ASA 3-4', 'ASA 4', 'ASA 4-5', 'ASA 5', 'ASA 6',
+  'ASA 1E', 'ASA 2E', 'ASA 3E', 'ASA 4E', 'ASA 5E',
+];
 const POSITION_OPTIONS = ['Supine', 'Prone', 'Lateral decubitus', 'Lithotomy', 'Beach chair', 'Sitting', 'Trendelenburg', 'Reverse Trendelenburg'];
-const ACCESS_OPTIONS = ['1x PIV', '2x PIV', '2x PIV + A-line', 'Central line', 'PICC', 'Existing port/PICC'];
+const ACCESS_OPTIONS = [
+  '1x PIV',
+  '2x PIV',
+  'Large bore IV',
+  '18g PIV',
+  '16g PIV',
+  '14g PIV',
+  'A-line',
+  'Central line',
+  'PICC',
+  'Existing port',
+  'IO access',
+];
 const MONITOR_OPTIONS = ['EKG', 'Temp', 'NIBP', 'Pulse Ox', 'ETCO2', 'Arterial Line', 'CVP', 'TEE', 'BIS/EEG', 'NIRS', 'Foley'];
 const EQUIPMENT_OPTIONS = ['Bear hugger', 'Fluid warmer', 'Cell saver', 'Video laryngoscope', 'Defibrillator pads', 'Warming blanket', 'Rapid infuser'];
 const PREMED_OPTIONS = ['Versed', 'Glycopyrrolate', 'None'];
@@ -42,14 +59,35 @@ const NM_BLOCK_OPTIONS = [
   'Succinylcholine 1-1.5mg/kg',
   'Cisatracurium 0.15-0.2mg/kg',
 ];
+// No dose here on purpose - sugammadex dosing depends on the twitch count at
+// the end of the case, so the plan is the agent; the dose table shows up
+// underneath as reference.
 const REVERSAL_OPTIONS = [
   'None needed',
-  'Sugammadex 2mg/kg (TOF 1-2)',
-  'Sugammadex 4mg/kg (deep)',
-  'Sugammadex 16mg/kg (CICV)',
-  'Neostigmine 0.04-0.05mg/kg + Glycopyrrolate',
+  'Sugammadex',
+  'Neostigmine + Glycopyrrolate',
 ];
-const PONV_RISK_OPTIONS = ['Female', 'Nonsmoker', 'Hx of PONV/motion sickness', 'Postop opioids expected'];
+const SOCIAL_OPTIONS = [
+  'Denies tobacco, alcohol, and drugs',
+  'Never smoker',
+  'Former smoker',
+  'Active smoker',
+  'Denies alcohol',
+  'Social alcohol use',
+  'Heavy alcohol use',
+  'Denies drug use',
+  'Marijuana use',
+  'Methamphetamine use',
+  'Opioid use',
+  'IV drug use',
+];
+const PONV_RISK_OPTIONS = [
+  'High PONV risk',
+  'Female',
+  'Nonsmoker',
+  'Hx of PONV/motion sickness',
+  'Postop opioids expected',
+];
 const ANTIEMETIC_OPTIONS = ['Zofran 4mg', 'Decadron 4-8mg', 'Reglan 10mg', 'Scopolamine patch', 'Haldol'];
 const PRESSOR_OPTIONS = [
   'Phenylephrine 50-100mcg bolus',
@@ -156,7 +194,8 @@ export const FIELDS: FieldDef[] = [
     keywords: ['ekg shows', 'echo shows', 'ejection fraction', 'ef of', 'ct scan', 'x-ray', 'chest x ray', 'mallampati', 'airway exam'],
   },
   {
-    id: 'smokingAlcoholDrugs', label: 'Smoking, Alcohol, Drugs', section: 'history', type: 'text',
+    id: 'smokingAlcoholDrugs', label: 'Smoking, Alcohol, Drugs', section: 'history', type: 'multiselect',
+    options: SOCIAL_OPTIONS,
     keywords: ['smokes', 'smoking history', 'pack year', 'tobacco', 'alcohol', 'drinks', 'drug use', 'illicit'],
   },
   {
@@ -182,8 +221,8 @@ export const FIELDS: FieldDef[] = [
     keywords: ['type and cross', 'type and screen', 'blood products', 'units of blood'],
   },
   {
-    id: 'access', label: 'Access', section: 'anesthesia_plan', type: 'select', options: ACCESS_OPTIONS,
-    keywords: ['iv access', 'iv placed', 'central line', 'a-line', 'arterial line'],
+    id: 'access', label: 'Access', section: 'anesthesia_plan', type: 'multiselect', options: ACCESS_OPTIONS,
+    keywords: ['iv access', 'iv placed', 'central line', 'a-line', 'arterial line', 'large bore', 'peripheral iv'],
   },
   {
     id: 'equipment', label: 'Equipment', section: 'anesthesia_plan', type: 'multiselect', options: EQUIPMENT_OPTIONS,
@@ -270,8 +309,11 @@ export const FIELDS: FieldDef[] = [
     keywords: ['protamine', 'tranexamic acid', 'txa', 'ddavp', 'desmopressin'],
   },
   {
-    id: 'onPump', label: 'On Pump', section: 'anesthesia_plan', type: 'select', options: YES_NO_OPTIONS,
+    id: 'onPump', label: 'On Pump', section: 'anesthesia_plan', type: 'multiselect', options: YES_NO_OPTIONS,
     keywords: ['on pump', 'cardiopulmonary bypass', 'cpb'],
+    // Infusions chosen elsewhere in the case are appended to the options at
+    // render time, since those are what would run on a pump.
+    includeCaseInfusions: true,
   },
 
   // Disposition & Post-Op
