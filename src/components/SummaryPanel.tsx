@@ -32,9 +32,14 @@ function buildPlainTextSummary(
     for (const f of filled) {
       const v = preopCase.values[f.id];
       const value = Array.isArray(v) ? v.join(', ') : v;
+      // Only the selected/primary dose goes in the copyable text - the full
+      // variant list is reference material for the screen, not the handoff.
       const doses = calculateDoses(v, weights)
-        .filter((d) => d.dose !== '-')
-        .map((d) => `${d.label} ${d.dose}`);
+        .map((drug) => {
+          const primary = drug.lines.find((l) => l.highlighted) ?? drug.lines[0];
+          return primary ? `${drug.label} ${primary.dose}` : null;
+        })
+        .filter(Boolean);
       lines.push(`- ${f.label}: ${value}${doses.length > 0 ? ` [${doses.join('; ')}]` : ''}`);
     }
     lines.push('');
@@ -90,7 +95,7 @@ export default function SummaryPanel({ preopCase }: Props) {
                     <dt>{f.label}</dt>
                     <dd>
                       {Array.isArray(v) ? v.join(', ') : v}
-                      <DoseHints doses={doses} />
+                      <DoseHints drugs={doses} />
                     </dd>
                   </div>
                 );

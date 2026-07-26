@@ -19,17 +19,69 @@ const MONITOR_OPTIONS = ['EKG', 'Temp', 'NIBP', 'Pulse Ox', 'ETCO2', 'Arterial L
 const EQUIPMENT_OPTIONS = ['Bear hugger', 'Fluid warmer', 'Cell saver', 'Video laryngoscope', 'Defibrillator pads', 'Warming blanket', 'Rapid infuser'];
 const PREMED_OPTIONS = ['Versed', 'Glycopyrrolate', 'None'];
 const REGIONAL_OPTIONS = ['None', 'Interscalene', 'Supraclavicular', 'Infraclavicular', 'Femoral', 'Adductor canal', 'Popliteal sciatic', 'TAP block', 'Erector spinae', 'Spinal', 'Epidural'];
-const INDUCTION_OPTIONS = ['Propofol 2mg/kg', 'Etomidate 0.2-0.3mg/kg', 'Ketamine 1-2mg/kg', 'Fentanyl 1-2mcg/kg', 'Lidocaine 1mg/kg', 'Rocuronium 0.6mg/kg', 'Succinylcholine 1-1.5mg/kg'];
-const SEDATION_OPTIONS = ['Versed', 'Propofol gtt', 'Dexmedetomidine gtt', 'None'];
+const INDUCTION_OPTIONS = [
+  'Propofol 1.5-2.5mg/kg',
+  'Etomidate 0.2-0.3mg/kg',
+  'Ketamine 1-2mg/kg',
+  'Midazolam 0.02-0.04mg/kg',
+  'Fentanyl 1-2mcg/kg',
+  'Lidocaine 1-1.5mg/kg',
+  'Rocuronium 0.6mg/kg (intubating)',
+  'Rocuronium 1.2mg/kg (RSI)',
+  'Succinylcholine 1-1.5mg/kg',
+  'Vecuronium 0.1-0.2mg/kg',
+  'Cisatracurium 0.15-0.2mg/kg',
+];
+const SEDATION_OPTIONS = ['Versed', 'Propofol gtt', 'Dexmedetomidine gtt', 'Remifentanil gtt', 'None'];
 const MAINTENANCE_OPTIONS = ['Sevoflurane', 'Desflurane', 'Isoflurane', 'TIVA', 'Sevoflurane + N2O'];
-const NM_BLOCK_OPTIONS = ['None', 'Rocuronium', 'Vecuronium', 'Succinylcholine', 'Cisatracurium'];
-const REVERSAL_OPTIONS = ['None needed', 'Sugammadex', 'Neostigmine + Glycopyrrolate'];
+const NM_BLOCK_OPTIONS = [
+  'None',
+  'Rocuronium 0.6mg/kg (intubating)',
+  'Rocuronium 1.2mg/kg (RSI)',
+  'Vecuronium 0.1-0.2mg/kg',
+  'Succinylcholine 1-1.5mg/kg',
+  'Cisatracurium 0.15-0.2mg/kg',
+];
+const REVERSAL_OPTIONS = [
+  'None needed',
+  'Sugammadex 2mg/kg (TOF 1-2)',
+  'Sugammadex 4mg/kg (deep)',
+  'Sugammadex 16mg/kg (CICV)',
+  'Neostigmine 0.04-0.05mg/kg + Glycopyrrolate',
+];
 const PONV_RISK_OPTIONS = ['Female', 'Nonsmoker', 'Hx of PONV/motion sickness', 'Postop opioids expected'];
-const ANTIEMETIC_OPTIONS = ['Zofran', 'Decadron', 'Reglan', 'Scopolamine patch', 'Haldol'];
-const PRESSOR_OPTIONS = ['Phenylephrine', 'Ephedrine', 'Norepinephrine', 'Vasopressin', 'Epinephrine'];
-const ANTIHYPERTENSIVE_OPTIONS = ['Labetalol', 'Hydralazine', 'Esmolol', 'Nicardipine', 'Clevidipine'];
-const ANTICHOLINERGIC_OPTIONS = ['Glycopyrrolate', 'Atropine'];
-const HEMOSTASIS_OPTIONS = ['Protamine', 'TXA', 'DDAVP', 'Factor products'];
+const ANTIEMETIC_OPTIONS = ['Zofran 4mg', 'Decadron 4-8mg', 'Reglan 10mg', 'Scopolamine patch', 'Haldol'];
+const PRESSOR_OPTIONS = [
+  'Phenylephrine 50-100mcg bolus',
+  'Phenylephrine 0.2-2mcg/kg/min gtt',
+  'Ephedrine 5-10mg bolus',
+  'Norepinephrine 5-10mcg bolus',
+  'Norepinephrine 0.02-0.3mcg/kg/min gtt',
+  'Vasopressin 0.5-1 unit bolus',
+  'Vasopressin 0.01-0.04 units/min gtt',
+  'Epinephrine 5-10mcg bolus',
+  'Epinephrine 0.02-0.3mcg/kg/min gtt',
+];
+const ANTIHYPERTENSIVE_OPTIONS = [
+  'Labetalol 5-10mg',
+  'Hydralazine 5-10mg',
+  'Esmolol 10-50mg',
+  'Nicardipine 5-15mg/hr',
+  'Clevidipine',
+];
+const ANTICHOLINERGIC_OPTIONS = ['Glycopyrrolate 0.2mg', 'Atropine 0.5mg'];
+const HEMOSTASIS_OPTIONS = ['Protamine', 'TXA 10-15mg/kg', 'DDAVP', 'Factor products'];
+const ANTIBIOTIC_OPTIONS = [
+  'Cefazolin',
+  'Vancomycin',
+  'Clindamycin 900mg',
+  'Gentamicin 5mg/kg',
+  'Ampicillin-Sulbactam 3g',
+  'Cefoxitin 2g',
+  'Ceftriaxone 2g',
+  'Ertapenem 1g',
+  'Metronidazole 500mg',
+];
 const DISPOSITION_OPTIONS = ['PACU', 'ICU', 'Stepdown'];
 const YES_NO_OPTIONS = ['Yes', 'No'];
 
@@ -154,8 +206,8 @@ export const FIELDS: FieldDef[] = [
     keywords: ['lactated ringers', 'normal saline', 'plasmalyte'],
   },
   {
-    id: 'antibiotics', label: 'Antibiotics', section: 'anesthesia_plan', type: 'text',
-    keywords: ['cefazolin', 'vancomycin', 'clindamycin', 'antibiotic prophylaxis'],
+    id: 'antibiotics', label: 'Antibiotics', section: 'anesthesia_plan', type: 'multiselect', options: ANTIBIOTIC_OPTIONS,
+    keywords: ['cefazolin', 'vancomycin', 'clindamycin', 'antibiotic prophylaxis', 'gentamicin', 'ceftriaxone', 'metronidazole'],
   },
   {
     id: 'premedication', label: 'Premedication', section: 'anesthesia_plan', type: 'select', options: PREMED_OPTIONS,

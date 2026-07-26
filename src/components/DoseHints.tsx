@@ -1,25 +1,30 @@
-import type { CalculatedDose } from '../lib/doseCalc';
+import type { CalculatedDrug } from '../lib/doseCalc';
 
 interface Props {
-  doses: CalculatedDose[];
+  drugs: CalculatedDrug[];
 }
 
-export default function DoseHints({ doses }: Props) {
-  if (doses.length === 0) return null;
+export default function DoseHints({ drugs }: Props) {
+  if (drugs.length === 0) return null;
 
   return (
     <div className="dose-hints">
-      {doses.map((d) => (
-        <div className="dose-hint" key={`${d.source}-${d.label}`}>
-          <div className="dose-hint-main">
-            <span className="dose-hint-label">{d.label}</span>
-            <span className="dose-hint-value">
-              {d.dose}
-              {d.capped && <span className="dose-capped"> (max)</span>}
-            </span>
-          </div>
-          {d.basis && <div className="dose-hint-basis">{d.basis}</div>}
-          {d.note && <div className="dose-hint-note">{d.note}</div>}
+      {drugs.map((drug) => (
+        <div className="dose-hint" key={`${drug.source}-${drug.label}`}>
+          <div className="dose-hint-drug">{drug.label}</div>
+          {drug.lines.map((line, i) => (
+            <div className={line.highlighted ? 'dose-line selected' : 'dose-line'} key={i}>
+              <div className="dose-line-main">
+                <span className="dose-line-indication">{line.indication ?? 'Dose'}</span>
+                <span className="dose-line-value">
+                  {line.dose}
+                  {line.capped && <span className="dose-capped"> max</span>}
+                </span>
+              </div>
+              {line.detail && <div className="dose-line-detail">{line.detail}</div>}
+              {line.note && <div className="dose-line-note">{line.note}</div>}
+            </div>
+          ))}
         </div>
       ))}
     </div>

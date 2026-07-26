@@ -215,7 +215,7 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
               onChange={(v) => setFieldValue(currentField.id, v)}
             />
 
-            <DoseHints doses={calculateDoses(preopCase.values[currentField.id], weights)} />
+            <DoseHints drugs={calculateDoses(preopCase.values[currentField.id], weights)} />
 
             <p className="muted small current-value">Current: {describeValue(preopCase.values[currentField.id])}</p>
 
@@ -282,7 +282,7 @@ export default function ChecklistPanel({ preopCase, onUpdateCase }: Props) {
                   value={preopCase.values[field.id]}
                   onChange={(v) => setFieldValue(field.id, v)}
                 />
-                <DoseHints doses={calculateDoses(preopCase.values[field.id], weights)} />
+                <DoseHints drugs={calculateDoses(preopCase.values[field.id], weights)} />
               </div>
             ))}
           </div>

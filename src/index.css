@@ -358,20 +358,47 @@ button:disabled {
   padding: 8px 10px;
 }
 
-.dose-hint-main {
+.dose-hint-drug {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.dose-line {
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+
+.dose-line:first-of-type {
+  border-top: none;
+}
+
+.dose-line.selected {
+  background: var(--accent-soft, rgba(109, 59, 255, 0.08));
+  border-radius: 4px;
+  padding: 6px;
+  margin: 2px -2px;
+}
+
+.dose-line-main {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
 }
 
-.dose-hint-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-h);
+.dose-line-indication {
+  font-size: 12px;
+  color: var(--muted);
 }
 
-.dose-hint-value {
+.dose-line.selected .dose-line-indication {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.dose-line-value {
   font-size: 15px;
   font-weight: 700;
   color: var(--accent);
@@ -379,21 +406,22 @@ button:disabled {
 }
 
 .dose-capped {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   color: var(--danger);
+  text-transform: uppercase;
 }
 
-.dose-hint-basis {
-  font-size: 12px;
+.dose-line-detail {
+  font-size: 11px;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
-.dose-hint-note {
-  font-size: 12px;
+.dose-line-note {
+  font-size: 11px;
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 3px;
   font-style: italic;
 }
 

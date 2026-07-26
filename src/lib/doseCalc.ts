@@ -1,56 +1,70 @@
-import { findDrugDose, findFixedDose, type DrugDose, type WeightBasis } from '../data/drugDoses';
+import {
+  findDrugEntry,
+  type DoseUnit,
+  type DoseVariant,
+  type DrugEntry,
+  type WeightBasis,
+} from '../data/drugDoses';
 import type { PatientWeights } from './weights';
 
-export interface CalculatedDose {
+export interface DoseLine {
+  /** e.g. "RSI", "Bolus", "Infusion" - blank when the drug has one dose. */
+  indication?: string;
+  /** e.g. "96 mg", "50-100 mcg", "16-160 mcg/min". */
+  dose: string;
+  /** e.g. "1.2 mg/kg x 80 kg actual" - blank for fixed doses. */
+  detail?: string;
+  note?: string;
+  capped?: boolean;
+  /** True for the variant matching the dose written on the chip. */
+  highlighted?: boolean;
+}
+
+export interface CalculatedDrug {
   /** The chip text this came from. */
   source: string;
   label: string;
-  /** e.g. "100 mg" or "75-125 mg", or a fixed-dose string. */
-  dose: string;
-  /** e.g. "2 mg/kg x 50 kg (actual)" - blank for fixed doses. */
-  basis: string;
-  /** Clinical note, including any conventional alternative dosing weight. */
-  note?: string;
-  capped?: boolean;
+  lines: DoseLine[];
 }
 
 interface PerKgDose {
   low: number;
   high?: number;
-  unit: 'mg' | 'mcg' | 'g';
+  unit: DoseUnit;
 }
 
 /**
  * Reads an explicit per-kg dose out of the selected text, e.g. "Propofol
- * 2mg/kg" or "Fentanyl 1-2 mcg/kg". What you picked wins over the default in
- * the dosing table, so the number shown always matches the label you chose.
+ * 2mg/kg". When present it's calculated as its own line and the matching
+ * reference variant is highlighted, so the number shown always matches the
+ * label picked.
  */
 export function parsePerKgDose(text: string): PerKgDose | undefined {
   const match = text
     .toLowerCase()
-    .match(/(\d+(?:\.\d+)?)\s*(?:-|to)?\s*(\d+(?:\.\d+)?)?\s*(mcg|microgram|mg|g)\s*\/\s*kg/);
+    .match(/(\d+(?:\.\d+)?)\s*(?:-|to)?\s*(\d+(?:\.\d+)?)?\s*(mcg|microgram|mg|g)\s*\/\s*kg(?!\s*\/)/);
   if (!match) return undefined;
 
-  const first = Number(match[1]);
-  const second = match[2] !== undefined ? Number(match[2]) : undefined;
-  if (!Number.isFinite(first)) return undefined;
-
+  const low = Number(match[1]);
+  if (!Number.isFinite(low)) return undefined;
+  const high = match[2] !== undefined ? Number(match[2]) : undefined;
   const rawUnit = match[3];
-  const unit: 'mg' | 'mcg' | 'g' = rawUnit === 'microgram' ? 'mcg' : (rawUnit as 'mg' | 'mcg' | 'g');
+  const unit: DoseUnit = rawUnit === 'microgram' ? 'mcg' : (rawUnit as DoseUnit);
 
-  return { low: first, high: second, unit };
+  return { low, high, unit };
 }
 
-function weightFor(basis: WeightBasis, weights: PatientWeights): number | undefined {
+function weightFor(basis: WeightBasis | undefined, weights: PatientWeights): number | undefined {
   switch (basis) {
-    case 'TBW':
-      return weights.tbwKg;
     case 'IBW':
       return weights.ibwKg;
     case 'LBW':
       return weights.lbwKg;
     case 'AdjBW':
       return weights.adjBwKg;
+    case 'TBW':
+    default:
+      return weights.tbwKg;
   }
 }
 
@@ -62,7 +76,7 @@ export function roundDose(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function formatDose(low: number, high: number | undefined, unit: string): string {
+function formatRange(low: number, high: number | undefined, unit: string): string {
   const roundedLow = roundDose(low);
   const roundedHigh = high !== undefined ? roundDose(high) : undefined;
   return roundedHigh !== undefined && roundedHigh !== roundedLow
@@ -71,70 +85,162 @@ function formatDose(low: number, high: number | undefined, unit: string): string
 }
 
 const BASIS_LABEL: Record<WeightBasis, string> = {
-  TBW: 'actual weight',
-  IBW: 'ideal body weight',
-  LBW: 'lean body weight',
-  AdjBW: 'adjusted body weight',
+  TBW: 'actual',
+  IBW: 'IBW',
+  LBW: 'LBW',
+  AdjBW: 'AdjBW',
 };
 
-/**
- * Builds the advisory note for drugs conventionally dosed on something other
- * than actual weight, including what the dose would be on that basis - shown
- * alongside, never substituted for the number you asked for.
- */
-function alternativeBasisNote(
-  entry: DrugDose | undefined,
-  perKg: PerKgDose,
+function perKgLine(
+  variant: Extract<DoseVariant, { kind: 'perKg' }>,
   weights: PatientWeights,
-): string | undefined {
-  if (!entry || entry.basis === 'TBW') return undefined;
+): DoseLine | null {
+  const basis = variant.basis ?? 'TBW';
+  const kg = weightFor(basis, weights) ?? weights.tbwKg;
+  if (kg === undefined) return null;
 
-  const altWeight = weightFor(entry.basis, weights);
-  if (altWeight === undefined) {
-    return `Conventionally dosed on ${BASIS_LABEL[entry.basis]} - enter height and sex to calculate that.`;
-  }
-
-  const altDose = formatDose(perKg.low * altWeight, perKg.high ? perKg.high * altWeight : undefined, perKg.unit);
-  return `Conventionally dosed on ${BASIS_LABEL[entry.basis]} (${Math.round(altWeight)} kg) = ${altDose}.`;
-}
-
-function calculateOne(source: string, weights: PatientWeights): CalculatedDose | null {
-  const entry = findDrugDose(source);
-
-  // Prefer the dose written on the chip; fall back to the table's default.
-  const perKg =
-    parsePerKgDose(source) ??
-    (entry && entry.perKg > 0 ? { low: entry.perKg, high: entry.perKgHigh, unit: entry.unit } : undefined);
-
-  if (!perKg) {
-    const fixed = findFixedDose(source);
-    if (fixed) return { source, label: fixed.label, dose: fixed.dose, basis: '' };
-    if (entry?.note) return { source, label: entry.label, dose: '-', basis: '', note: entry.note };
-    return null;
-  }
-
-  const tbw = weights.tbwKg;
-  if (tbw === undefined) return null;
-
-  const cap = entry?.maxDose;
-  const rawLow = perKg.low * tbw;
-  const rawHigh = perKg.high !== undefined ? perKg.high * tbw : undefined;
-  const wasCapped = cap !== undefined && (rawLow > cap || (rawHigh !== undefined && rawHigh > cap));
+  const usedFallback = weightFor(basis, weights) === undefined;
+  const cap = variant.maxDose;
+  const rawLow = variant.low * kg;
+  const rawHigh = variant.high !== undefined ? variant.high * kg : undefined;
+  const capped = cap !== undefined && (rawLow > cap || (rawHigh !== undefined && rawHigh > cap));
 
   const low = cap !== undefined ? Math.min(rawLow, cap) : rawLow;
   const high = rawHigh !== undefined && cap !== undefined ? Math.min(rawHigh, cap) : rawHigh;
 
-  const perKgText = perKg.high !== undefined ? `${perKg.low}-${perKg.high}` : `${perKg.low}`;
-  const notes = [alternativeBasisNote(entry, perKg, weights), entry?.note].filter(Boolean);
+  const perKgText = variant.high !== undefined ? `${variant.low}-${variant.high}` : `${variant.low}`;
+  const basisText = usedFallback
+    ? `${Math.round(kg)} kg actual (${BASIS_LABEL[basis]} unavailable)`
+    : `${Math.round(kg)} kg ${BASIS_LABEL[basis]}`;
 
   return {
-    source,
-    label: entry?.label ?? source,
-    dose: formatDose(low, high, perKg.unit),
-    basis: `${perKgText} ${perKg.unit}/kg x ${Math.round(tbw)} kg actual`,
-    note: notes.length > 0 ? notes.join(' ') : undefined,
-    capped: wasCapped,
+    indication: variant.indication,
+    dose: formatRange(low, high, variant.unit),
+    detail: `${perKgText} ${variant.unit}/kg x ${basisText}`,
+    note: variant.note,
+    capped,
   };
+}
+
+function infusionLine(
+  variant: Extract<DoseVariant, { kind: 'infusion' }>,
+  weights: PatientWeights,
+): DoseLine {
+  const rate =
+    variant.high !== undefined ? `${variant.low}-${variant.high} ${variant.unit}` : `${variant.low} ${variant.unit}`;
+
+  // Weight-based rates get multiplied out into what actually runs.
+  const kg = weights.tbwKg;
+  let detail: string | undefined;
+  if (kg !== undefined && variant.unit.startsWith('mcg/kg')) {
+    const perTime = variant.unit === 'mcg/kg/min' ? 'mcg/min' : 'mcg/hr';
+    detail = `= ${formatRange(variant.low * kg, variant.high !== undefined ? variant.high * kg : undefined, perTime)} at ${Math.round(kg)} kg`;
+  }
+
+  return { indication: variant.indication, dose: rate, detail, note: variant.note };
+}
+
+function bandedLine(
+  variant: Extract<DoseVariant, { kind: 'banded' }>,
+  weights: PatientWeights,
+): DoseLine {
+  const kg = weights.tbwKg;
+  if (kg === undefined) {
+    const summary = variant.bands
+      .map((b) => (b.upToKg !== undefined ? `<=${b.upToKg} kg: ${b.dose}` : `>: ${b.dose}`))
+      .join(', ');
+    return { indication: variant.indication, dose: summary, note: variant.note };
+  }
+
+  const band = variant.bands.find((b) => b.upToKg === undefined || kg <= b.upToKg) ?? variant.bands[variant.bands.length - 1];
+  return {
+    indication: variant.indication,
+    dose: band.dose,
+    detail: `at ${Math.round(kg)} kg`,
+    note: variant.note,
+  };
+}
+
+function variantLine(variant: DoseVariant, weights: PatientWeights): DoseLine | null {
+  switch (variant.kind) {
+    case 'perKg':
+      return perKgLine(variant, weights);
+    case 'infusion':
+      return infusionLine(variant, weights);
+    case 'banded':
+      return bandedLine(variant, weights);
+    case 'fixed':
+      return { indication: variant.indication, dose: variant.dose, note: variant.note };
+  }
+}
+
+/**
+ * Builds every dose line for one selected drug: the dose written on the chip
+ * (if any) plus the reference variants for that drug, so picking
+ * "Rocuronium" also surfaces the RSI and maintenance doses.
+ */
+function calculateDrug(source: string, weights: PatientWeights): CalculatedDrug | null {
+  const entry: DrugEntry | undefined = findDrugEntry(source);
+  if (!entry) return null;
+
+  const explicit = parsePerKgDose(source);
+  const lines: DoseLine[] = [];
+
+  if (explicit && weights.tbwKg !== undefined) {
+    // Match the reference variant so we can label the line meaningfully.
+    const matching = entry.variants.find(
+      (v) => v.kind === 'perKg' && v.low === explicit.low && (v.high ?? undefined) === (explicit.high ?? undefined),
+    );
+    const indication = matching && matching.kind === 'perKg' ? matching.indication : 'As selected';
+
+    // Ceilings are a property of the drug, not of the dose written on the
+    // chip, so apply them even to a hand-dictated rate.
+    const cap =
+      matching && matching.kind === 'perKg'
+        ? matching.maxDose
+        : entry.variants.find((v) => v.kind === 'perKg' && v.maxDose !== undefined)?.kind === 'perKg'
+          ? (entry.variants.find((v) => v.kind === 'perKg' && v.maxDose !== undefined) as { maxDose?: number }).maxDose
+          : undefined;
+
+    const kg = weights.tbwKg;
+    const rawLow = explicit.low * kg;
+    const rawHigh = explicit.high !== undefined ? explicit.high * kg : undefined;
+    const capped = cap !== undefined && (rawLow > cap || (rawHigh !== undefined && rawHigh > cap));
+    const low = cap !== undefined ? Math.min(rawLow, cap) : rawLow;
+    const high = rawHigh !== undefined && cap !== undefined ? Math.min(rawHigh, cap) : rawHigh;
+
+    lines.push({
+      indication,
+      dose: formatRange(low, high, explicit.unit),
+      detail: `${explicit.high !== undefined ? `${explicit.low}-${explicit.high}` : explicit.low} ${explicit.unit}/kg x ${Math.round(kg)} kg actual`,
+      highlighted: true,
+      capped,
+    });
+  }
+
+  for (const variant of entry.variants) {
+    // Skip the reference variant already shown as the selected dose.
+    if (
+      explicit &&
+      variant.kind === 'perKg' &&
+      variant.low === explicit.low &&
+      (variant.high ?? undefined) === (explicit.high ?? undefined)
+    ) {
+      const line = perKgLine(variant, weights);
+      if (line?.note) lines[0].note = line.note;
+      if (line && line.detail !== lines[0].detail && variant.basis && variant.basis !== 'TBW') {
+        lines[0].note = [`Conventionally dosed on ${BASIS_LABEL[variant.basis]} = ${line.dose}.`, line.note]
+          .filter(Boolean)
+          .join(' ');
+      }
+      continue;
+    }
+    const line = variantLine(variant, weights);
+    if (line) lines.push(line);
+  }
+
+  if (lines.length === 0) return null;
+  return { source, label: entry.label, lines };
 }
 
 /**
@@ -144,15 +250,26 @@ function calculateOne(source: string, weights: PatientWeights): CalculatedDose |
 export function calculateDoses(
   value: string | string[] | undefined,
   weights: PatientWeights,
-): CalculatedDose[] {
+): CalculatedDrug[] {
   if (value === undefined) return [];
   const entries = Array.isArray(value) ? value : [value];
 
-  const results: CalculatedDose[] = [];
+  const results: CalculatedDrug[] = [];
+  const seen = new Set<string>();
+
   for (const entry of entries) {
     if (!entry.trim()) continue;
-    const calculated = calculateOne(entry, weights);
-    if (calculated) results.push(calculated);
+    // One chip can name more than one drug ("Neostigmine 0.05mg/kg +
+    // Glycopyrrolate"); calculate each part so both get their own dosing.
+    for (const part of entry.split(/\s*\+\s*/)) {
+      if (!part.trim()) continue;
+      const calculated = calculateDrug(part, weights);
+      if (!calculated) continue;
+      const key = `${calculated.label}-${calculated.lines[0]?.dose ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(calculated);
+    }
   }
   return results;
 }
