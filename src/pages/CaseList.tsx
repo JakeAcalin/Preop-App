@@ -4,15 +4,19 @@ import { listCases, createCase, deleteCase, exportCases, importCases } from '../
 import type { PreopCase } from '../types';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
 import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
+import { ensurePersistentStorage, formatBytes, type StorageStatus } from '../lib/storagePersistence';
 
 export default function CaseList() {
   const [cases, setCases] = useState<PreopCase[]>([]);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [storage, setStorage] = useState<StorageStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     listCases().then(setCases);
+    // Ask once per load; the browser remembers the grant.
+    ensurePersistentStorage().then(setStorage);
   }, []);
 
   async function handleExport() {
@@ -77,9 +81,24 @@ export default function CaseList() {
         />
       </div>
       {backupMessage && <p className="muted small">{backupMessage}</p>}
+
+      {storage?.state === 'persisted' && (
+        <p className="muted small">
+          Cases save automatically and this device has granted persistent storage, so they won't be cleared to free up
+          space{storage.usageBytes !== undefined ? ` (using ${formatBytes(storage.usageBytes)})` : ''}. Exporting is
+          optional - worth doing before clearing Safari data or changing phones.
+        </p>
+      )}
+      {storage?.state === 'best-effort' && (
+        <p className="muted small">
+          Cases save automatically, but this browser hasn't granted persistent storage, so it could clear them if the
+          device runs low on space. Adding the app to your home screen usually earns persistence - until then, export a
+          backup now and then.
+        </p>
+      )}
       <p className="muted small">
-        Cases are stored only on this device, in this browser. Export a backup to keep a copy - and note that the
-        home-screen app and Safari have separate storage on iOS, so a case saved in one won't appear in the other.
+        Note that the home-screen app and Safari keep separate storage on iOS, so a case saved in one won't appear in
+        the other.
       </p>
 
       <h2>Cases</h2>
