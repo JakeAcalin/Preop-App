@@ -445,6 +445,12 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.backup-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
 .new-case-btn {
   width: 100%;
   padding: 14px;

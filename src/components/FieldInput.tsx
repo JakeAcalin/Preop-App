@@ -106,10 +106,16 @@ export default function FieldInput({ field, value, onChange, options }: Props) {
   }
 
   if (field.type === 'select') {
+    const selectOptions = options ?? field.options ?? [];
+    const current = (value as string) ?? '';
+    // Option lists change between versions; keep showing a previously saved
+    // value even if it's no longer offered, rather than silently blanking it.
+    const withCurrent = current && !selectOptions.includes(current) ? [current, ...selectOptions] : selectOptions;
+
     return (
-      <select value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
+      <select value={current} onChange={(e) => onChange(e.target.value)}>
         <option value="">-- not set --</option>
-        {(options ?? field.options)?.map((opt) => (
+        {withCurrent.map((opt) => (
           <option key={opt} value={opt}>
             {opt}
           </option>
