@@ -6,6 +6,7 @@ import type { PreopCase } from '../types';
 import { resolveCaseProcedure } from '../lib/caseProcedure';
 import { displayCaseLabel, formatWeekday } from '../lib/caseDate';
 import { ensurePersistentStorage, formatBytes, type StorageStatus } from '../lib/storagePersistence';
+import SyncPanel from '../components/SyncPanel';
 
 export default function CaseList() {
   const [cases, setCases] = useState<PreopCase[]>([]);
@@ -51,7 +52,9 @@ export default function CaseList() {
     try {
       const result = await importCases(await file.text());
       setCases(await listCases());
-      setBackupMessage(`Restored: ${result.added} added, ${result.updated} updated, ${result.skipped} already current.`);
+      setBackupMessage(
+        `Restored: ${result.added} added, ${result.updated} updated, ${result.deleted} deleted, ${result.skipped} already current.`,
+      );
     } catch (error) {
       setBackupMessage(error instanceof Error ? error.message : 'Could not read that backup file.');
     }
@@ -149,6 +152,8 @@ export default function CaseList() {
         Note that the home-screen app and Safari keep separate storage on iOS, so a case saved in one won't appear in
         the other.
       </p>
+
+      <SyncPanel onSynced={() => listCases().then(setCases)} />
 
       <h2>Cases</h2>
       {cases.length === 0 && <p className="muted">No cases yet.</p>}

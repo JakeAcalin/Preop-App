@@ -4,11 +4,18 @@ import { FIELDS } from '../data/fields';
 import { defaultCaseDate, toISODate } from './caseDate';
 import { deidentifyCases, type Redaction } from './deidentify';
 
+/** id -> time it was deleted, so a sync doesn't resurrect deleted cases. */
+export type Tombstones = Record<string, number>;
+
 interface PreopDB extends DBSchema {
   cases: {
     key: string;
     value: PreopCase;
     indexes: { 'by-updatedAt': number };
+  };
+  meta: {
+    key: string;
+    value: unknown;
   };
 }
 
@@ -16,14 +23,35 @@ let dbPromise: Promise<IDBPDatabase<PreopDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<PreopDB>('preop-app', 1, {
-      upgrade(db) {
-        const store = db.createObjectStore('cases', { keyPath: 'id' });
-        store.createIndex('by-updatedAt', 'updatedAt');
+    dbPromise = openDB<PreopDB>('preop-app', 2, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const store = db.createObjectStore('cases', { keyPath: 'id' });
+          store.createIndex('by-updatedAt', 'updatedAt');
+        }
+        // v2 adds a meta store for the sync file handle, deletion tombstones
+        // and the last sync time.
+        if (oldVersion < 2) {
+          db.createObjectStore('meta');
+        }
       },
     });
   }
   return dbPromise;
+}
+
+export async function getMeta<T>(key: string): Promise<T | undefined> {
+  const db = await getDB();
+  return (await db.get('meta', key)) as T | undefined;
+}
+
+export async function setMeta(key: string, value: unknown): Promise<void> {
+  const db = await getDB();
+  await db.put('meta', value, key);
+}
+
+export async function getTombstones(): Promise<Tombstones> {
+  return (await getMeta<Tombstones>('deletions')) ?? {};
 }
 
 /**
@@ -93,6 +121,72 @@ export async function saveCase(preopCase: PreopCase): Promise<void> {
 export async function deleteCase(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('cases', id);
+  // Remember the deletion, otherwise the next sync pulls the case back in
+  // from a device that hasn't heard about it yet.
+  const tombstones = await getTombstones();
+  tombstones[id] = Date.now();
+  await setMeta('deletions', tombstones);
+}
+
+export interface MergeResult {
+  added: number;
+  updated: number;
+  skipped: number;
+  deleted: number;
+}
+
+/**
+ * Merges incoming cases into local storage. A case is taken only when it is
+ * newer than the local copy, so syncing an older file never overwrites more
+ * recent work, and deletions from either side are honoured.
+ */
+export async function mergeCases(
+  incoming: PreopCase[],
+  incomingTombstones: Tombstones = {},
+): Promise<MergeResult> {
+  const result: MergeResult = { added: 0, updated: 0, skipped: 0, deleted: 0 };
+
+  const tombstones = await getTombstones();
+  for (const [id, deletedAt] of Object.entries(incomingTombstones)) {
+    if (!tombstones[id] || deletedAt > tombstones[id]) tombstones[id] = deletedAt;
+  }
+
+  for (const candidate of incoming) {
+    if (!candidate?.id) {
+      result.skipped += 1;
+      continue;
+    }
+
+    const deletedAt = tombstones[candidate.id];
+    if (deletedAt !== undefined && deletedAt >= (candidate.updatedAt ?? 0)) {
+      result.skipped += 1;
+      continue;
+    }
+
+    const existing = await getCase(candidate.id);
+    if (!existing) {
+      await saveCase(migrateCase(candidate));
+      result.added += 1;
+    } else if ((candidate.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
+      await saveCase(migrateCase(candidate));
+      result.updated += 1;
+    } else {
+      result.skipped += 1;
+    }
+  }
+
+  // Apply deletions that happened on the other device.
+  const db = await getDB();
+  for (const [id, deletedAt] of Object.entries(tombstones)) {
+    const existing = await db.get('cases', id);
+    if (existing && deletedAt >= (existing.updatedAt ?? 0)) {
+      await db.delete('cases', id);
+      result.deleted += 1;
+    }
+  }
+
+  await setMeta('deletions', tombstones);
+  return result;
 }
 
 /**
@@ -142,43 +236,25 @@ export async function exportCases(): Promise<string> {
   return JSON.stringify(backup, null, 2);
 }
 
-export interface ImportResult {
-  added: number;
-  updated: number;
-  skipped: number;
-}
+export type ImportResult = MergeResult;
 
 /**
- * Restores cases from a backup file. Cases are merged by id: an incoming case
- * replaces the stored one only when it is newer, so importing an older backup
- * never overwrites more recent work.
+ * Restores cases from a backup or sync file. Cases are merged by id: an
+ * incoming case replaces the stored one only when it is newer, so importing
+ * an older backup never overwrites more recent work.
  */
 export async function importCases(json: string): Promise<ImportResult> {
-  const parsed = JSON.parse(json) as Partial<BackupFile>;
+  const parsed = JSON.parse(json) as Partial<BackupFile> & { deletions?: Tombstones; deidentified?: boolean };
   if (parsed.app !== 'preop-app' || !Array.isArray(parsed.cases)) {
     throw new Error("That doesn't look like a Preop Assistant backup file.");
   }
-
-  const result: ImportResult = { added: 0, updated: 0, skipped: 0 };
-
-  for (const incoming of parsed.cases) {
-    if (!incoming?.id) {
-      result.skipped += 1;
-      continue;
-    }
-    const existing = await getCase(incoming.id);
-    if (!existing) {
-      await saveCase(migrateCase(incoming));
-      result.added += 1;
-    } else if ((incoming.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
-      await saveCase(migrateCase(incoming));
-      result.updated += 1;
-    } else {
-      result.skipped += 1;
-    }
+  if (parsed.deidentified) {
+    throw new Error(
+      'That file holds de-identified cases - dates and CSN were removed, so it can\'t be restored as working cases.',
+    );
   }
 
-  return result;
+  return mergeCases(parsed.cases, parsed.deletions ?? {});
 }
 
 export async function createCase(): Promise<PreopCase> {
